@@ -13,11 +13,14 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_compile_options(-Wall -Wextra -pedantic)
 
 find_package(PkgConfig REQUIRED)
+find_package(CURL REQUIRED)
+
 pkg_check_modules(GTKMM REQUIRED IMPORTED_TARGET gtkmm-4.0)
 pkg_check_modules(ADWAITA REQUIRED IMPORTED_TARGET libadwaita-1)
 
 add_executable(blue-hub
     src/main.cpp
+    src/core/flathub_service.cpp
     src/ui/main_window.cpp
     src/ui/discover_page.cpp
     src/ui/installed_page.cpp
@@ -31,4 +34,5 @@ target_include_directories(blue-hub PRIVATE
 target_link_libraries(blue-hub PRIVATE
     PkgConfig::GTKMM
     PkgConfig::ADWAITA
+    CURL::libcurl
 )

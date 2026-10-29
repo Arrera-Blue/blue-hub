@@ -1,8 +1,107 @@
-/* Style global et cartes */
-.hero-banner {
-    background-color: #aeb4b9;
-    border-radius: 14px;
-    min-height: 240px;
+/* Carrousel Adwaita & Slides */
+.hero-carousel-container {
+    margin-bottom: 8px;
+}
+
+.hero-slide {
+    border-radius: 18px;
+    padding: 28px 44px;
+    min-height: 220px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+}
+
+/* Couleurs personnalisées par application */
+.slide-vlc {
+    background: linear-gradient(135deg, #b84300 0%, #e65c00 50%, #ff7b1a 100%);
+    box-shadow: 0 6px 18px rgba(230, 92, 0, 0.35);
+}
+
+.slide-blender {
+    background: linear-gradient(135deg, #a64600 0%, #cf6300 50%, #ea7600 100%);
+    box-shadow: 0 6px 18px rgba(207, 99, 0, 0.35);
+}
+
+.slide-gimp {
+    background: linear-gradient(135deg, #283747 0%, #405466 50%, #5d7388 100%);
+    box-shadow: 0 6px 18px rgba(40, 55, 71, 0.35);
+}
+
+.slide-godot {
+    background: linear-gradient(135deg, #1b3858 0%, #295786 50%, #478cbf 100%);
+    box-shadow: 0 6px 18px rgba(71, 140, 191, 0.35);
+}
+
+.slide-vscode {
+    background: linear-gradient(135deg, #003a6c 0%, #0065b3 50%, #007acc 100%);
+    box-shadow: 0 6px 18px rgba(0, 122, 204, 0.35);
+}
+
+/* Palettes aléatoires pour les applications sans couleur définie */
+.slide-random-purple {
+    background: linear-gradient(135deg, #4a148c 0%, #6a1b9a 50%, #8e24aa 100%);
+    box-shadow: 0 6px 18px rgba(106, 27, 154, 0.35);
+}
+
+.slide-random-emerald {
+    background: linear-gradient(135deg, #004d40 0%, #00695c 50%, #00897b 100%);
+    box-shadow: 0 6px 18px rgba(0, 105, 92, 0.35);
+}
+
+.slide-random-ruby {
+    background: linear-gradient(135deg, #880e4f 0%, #ad1457 50%, #d81b60 100%);
+    box-shadow: 0 6px 18px rgba(173, 20, 87, 0.35);
+}
+
+.hero-slide-icon-box {
+    background: transparent;
+    border: none;
+    min-width: 76px;
+    min-height: 76px;
+}
+
+.hero-fallback-letter {
+    font-size: 2.4rem;
+    font-weight: 800;
+    color: #ffffff;
+}
+
+.hero-app-title {
+    font-size: 1.85rem;
+    font-weight: 800;
+    color: #ffffff;
+}
+
+.hero-app-tagline {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: #f0f4f8;
+}
+
+.hero-badge {
+    background-color: rgba(255, 255, 255, 0.25);
+    border-radius: 9999px;
+    padding: 4px 14px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+/* Flèches de navigation du Carrousel */
+.carousel-nav-btn {
+    border-radius: 9999px;
+    min-width: 44px;
+    min-height: 44px;
+    background-color: #e3e5e7;
+    color: #1a1a1a;
+    border: none;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+    transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+.carousel-nav-btn:hover {
+    background-color: #4995c7;
+    color: #ffffff;
 }
 
 /* Boutons de catégories */
