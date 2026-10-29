@@ -35,17 +35,12 @@ private:
 
     // Grille des 6 catégories (2 lignes x 3 colonnes)
     Gtk::Grid m_categories_grid;
-    Gtk::Button m_btn_create{"Create"};
-    Gtk::Button m_btn_work{"WORK"};
-    Gtk::Button m_btn_play{"PLAY"};
-    Gtk::Button m_btn_socialise{"SOCIALISE"};
-    Gtk::Button m_btn_learn{"LEARN"};
-    Gtk::Button m_btn_develop{"DEVELOP"};
 
     // Rangée des cartes d'applications
     Gtk::Box m_apps_row{Gtk::Orientation::HORIZONTAL, 16};
 
     Gtk::Box* create_slide(const std::string& name, const std::string& tagline, const std::string& icon_name, const std::string& local_icon_path, const std::string& color_class);
+    Gtk::Button* create_category_card(const std::string& fr_name, const std::string& en_name, const std::string& icon_name, const std::string& css_class);
     Gtk::Box* create_app_card(const std::string& name);
 
     // 2. Vue Hors-Ligne (AdwStatusPage)

@@ -52,31 +52,28 @@ DiscoverPage::DiscoverPage() {
 
     m_content_box.append(m_carousel_container);
 
-    // 2. Grille des 6 catégories
+    // 2. Grille des 6 catégories façon GNOME Software (2x3)
     m_categories_grid.set_row_spacing(16);
     m_categories_grid.set_column_spacing(16);
     m_categories_grid.set_column_homogeneous(true);
     m_categories_grid.set_row_homogeneous(true);
 
-    auto setup_cat_btn = [](Gtk::Button& btn) {
-        btn.add_css_class("category-card");
-        btn.set_cursor("pointer");
-    };
+    auto btn_create = create_category_card("Créer", "Create", "applications-graphics-symbolic", "cat-create");
+    auto btn_work = create_category_card("Travailler", "Work", "folder-documents-symbolic", "cat-work");
+    auto btn_play = create_category_card("Jouer", "Play", "input-gaming-symbolic", "cat-play");
+    auto btn_socialise = create_category_card("Échanger", "Socialise", "chat-message-new-symbolic", "cat-socialise");
+    auto btn_learn = create_category_card("Apprendre", "Learn", "help-browser-symbolic", "cat-learn");
+    auto btn_develop = create_category_card("Développer", "Develop", "utilities-terminal-symbolic", "cat-develop");
 
-    setup_cat_btn(m_btn_create);
-    setup_cat_btn(m_btn_work);
-    setup_cat_btn(m_btn_play);
-    setup_cat_btn(m_btn_socialise);
-    setup_cat_btn(m_btn_learn);
-    setup_cat_btn(m_btn_develop);
+    // Ligne 1
+    m_categories_grid.attach(*btn_create, 0, 0);
+    m_categories_grid.attach(*btn_work, 1, 0);
+    m_categories_grid.attach(*btn_play, 2, 0);
 
-    m_categories_grid.attach(m_btn_create, 0, 0);
-    m_categories_grid.attach(m_btn_work, 1, 0);
-    m_categories_grid.attach(m_btn_play, 2, 0);
-
-    m_categories_grid.attach(m_btn_socialise, 0, 1);
-    m_categories_grid.attach(m_btn_learn, 1, 1);
-    m_categories_grid.attach(m_btn_develop, 2, 1);
+    // Ligne 2
+    m_categories_grid.attach(*btn_socialise, 0, 1);
+    m_categories_grid.attach(*btn_learn, 1, 1);
+    m_categories_grid.attach(*btn_develop, 2, 1);
 
     m_content_box.append(m_categories_grid);
 
@@ -93,11 +90,18 @@ DiscoverPage::DiscoverPage() {
     add(m_scrolled_window, "content");
 
     // --- Configuration de la vue Hors-Ligne (AdwStatusPage) ---
+    const char* const* langs = g_get_language_names();
+    bool is_french = (langs && langs[0] && std::string(langs[0]).rfind("fr", 0) == 0);
+
     m_status_page = adw_status_page_new();
     adw_status_page_set_icon_name(ADW_STATUS_PAGE(m_status_page), "network-offline-symbolic");
-    adw_status_page_set_title(ADW_STATUS_PAGE(m_status_page), "Aucune connexion Internet");
-    adw_status_page_set_description(ADW_STATUS_PAGE(m_status_page), "Connectez-vous à Internet pour charger la logithèque et découvrir de nouvelles applications.");
+    adw_status_page_set_title(ADW_STATUS_PAGE(m_status_page), 
+        is_french ? "Aucune connexion Internet" : "No Internet Connection");
+    adw_status_page_set_description(ADW_STATUS_PAGE(m_status_page), 
+        is_french ? "Connectez-vous à Internet pour charger la logithèque et découvrir de nouvelles applications." 
+                  : "Connect to the Internet to load the software hub and discover new apps.");
 
+    m_btn_retry.set_label(is_french ? "Réessayer" : "Try Again");
     m_btn_retry.add_css_class("pill");
     m_btn_retry.add_css_class("suggested-action");
     m_btn_retry.set_halign(Gtk::Align::CENTER);
@@ -107,7 +111,6 @@ DiscoverPage::DiscoverPage() {
     adw_status_page_set_child(ADW_STATUS_PAGE(m_status_page), GTK_WIDGET(m_btn_retry.gobj()));
     add(*Glib::wrap(m_status_page), "offline");
 
-    // Affichage par défaut pendant la vérification
     set_visible_child("content");
 
     // 4. Lancement de la récupération API Flathub en arrière-plan
@@ -144,12 +147,10 @@ void DiscoverPage::on_retry_clicked() {
 
 void DiscoverPage::on_trending_loaded() {
     if (!m_has_connection) {
-        // Basculer sur la page d'état hors-ligne
         set_visible_child("offline");
         return;
     }
 
-    // Afficher la page de contenu normale
     set_visible_child("content");
 
     // Vider les anciennes diapositives
@@ -194,6 +195,34 @@ void DiscoverPage::on_next_clicked() {
     }
 }
 
+Gtk::Button* DiscoverPage::create_category_card(const std::string& fr_name, const std::string& en_name, const std::string& icon_name, const std::string& css_class) {
+    auto btn = Gtk::make_managed<Gtk::Button>();
+    btn->add_css_class("cat-card");
+    btn->add_css_class(css_class);
+    btn->set_cursor("pointer");
+
+    auto box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 12);
+    box->set_halign(Gtk::Align::CENTER);
+    box->set_valign(Gtk::Align::CENTER);
+
+    auto icon = Gtk::make_managed<Gtk::Image>();
+    icon->set_from_icon_name(icon_name);
+    icon->set_pixel_size(24);
+    box->append(*icon);
+
+    // Détection de la langue du système
+    const char* const* langs = g_get_language_names();
+    bool is_french = (langs && langs[0] && std::string(langs[0]).rfind("fr", 0) == 0);
+    std::string title = is_french ? fr_name : en_name;
+
+    auto label = Gtk::make_managed<Gtk::Label>(title);
+    label->add_css_class("cat-label");
+    box->append(*label);
+
+    btn->set_child(*box);
+    return btn;
+}
+
 Gtk::Box* DiscoverPage::create_slide(const std::string& name, const std::string& tagline, const std::string& icon_name, const std::string& local_icon_path, const std::string& color_class) {
     auto slide = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 24);
     slide->add_css_class("hero-slide");
@@ -207,7 +236,6 @@ Gtk::Box* DiscoverPage::create_slide(const std::string& name, const std::string&
     icon_box->set_valign(Gtk::Align::CENTER);
     icon_box->set_halign(Gtk::Align::CENTER);
 
-    // Priorité 1 : Image téléchargée depuis Flathub
     if (!local_icon_path.empty() && std::filesystem::exists(local_icon_path)) {
         auto icon_img = Gtk::make_managed<Gtk::Image>();
         icon_img->set(local_icon_path);
@@ -215,7 +243,6 @@ Gtk::Box* DiscoverPage::create_slide(const std::string& name, const std::string&
         icon_img->set_expand(true);
         icon_box->append(*icon_img);
     } else {
-        // Priorité 2 : Thème local du système
         auto display = Gdk::Display::get_default();
         bool icon_exists = false;
         if (display) {
@@ -230,7 +257,6 @@ Gtk::Box* DiscoverPage::create_slide(const std::string& name, const std::string&
             icon_img->set_expand(true);
             icon_box->append(*icon_img);
         } else {
-            // Priorité 3 : Initiale de secours
             std::string initial = name.empty() ? "?" : name.substr(0, 1);
             auto letter_label = Gtk::make_managed<Gtk::Label>(initial);
             letter_label->add_css_class("hero-fallback-letter");
