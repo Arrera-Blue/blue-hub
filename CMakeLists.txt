@@ -20,6 +20,7 @@ add_executable(blue-hub
     src/main.cpp
     src/ui/main_window.cpp
     src/ui/discover_page.cpp
+    src/ui/installed_page.cpp
 )
 
 target_include_directories(blue-hub PRIVATE

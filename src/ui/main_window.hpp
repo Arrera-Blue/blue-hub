@@ -2,6 +2,7 @@
 
 #include <gtkmm.h>
 #include "discover_page.hpp"
+#include "installed_page.hpp"
 
 namespace bluehub::ui {
 
@@ -15,6 +16,8 @@ private:
     void on_install_appimage_clicked();
     void on_install_rpm_clicked();
     void on_preferences_clicked();
+
+    void switch_tab(const std::string& tab_name);
 
     // Barre de titre / HeaderBar
     Gtk::HeaderBar m_header_bar;
@@ -38,8 +41,11 @@ private:
     // Bouton de recherche (haut droite)
     Gtk::Button m_search_btn;
 
-    // Contenu
+    // Conteneur de pages (Stack)
+    Gtk::Stack m_stack;
     DiscoverPage m_discover_page;
+    InstalledPage m_installed_page;
+    Gtk::Box m_updates_placeholder{Gtk::Orientation::VERTICAL};
 };
 
 } // namespace bluehub::ui
