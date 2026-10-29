@@ -5,8 +5,10 @@
 #include <string>
 #include <vector>
 #include <thread>
+#include <memory>
 #include "core/flathub_service.hpp"
 #include "core/abpm_service.hpp"
+#include "app_details_modal.hpp"
 
 namespace bluehub::ui {
 
@@ -67,6 +69,8 @@ private:
     int m_loaded_apps_count{0};
     bool m_is_loading_apps{false};
     bool m_has_more_apps{true};
+    void open_app_details(const core::DiscoverApp& app);
+    std::unique_ptr<AppDetailsModal> m_details_modal;
 };
 
 } // namespace bluehub::ui

@@ -377,6 +377,10 @@ Gtk::Button* DiscoverPage::create_app_card(const core::DiscoverApp& app) {
     root_box->append(*text_box);
 
     btn->set_child(*root_box);
+
+    btn->signal_clicked().connect([this, app]() {
+        open_app_details(app);
+    });
     return btn;
 }
 
@@ -445,6 +449,18 @@ Gtk::Box* DiscoverPage::create_slide(const std::string& name, const std::string&
     slide->append(*info_box);
 
     return slide;
+}
+
+void DiscoverPage::open_app_details(const core::DiscoverApp& app) {
+    if (!m_details_modal) {
+        auto root = dynamic_cast<Gtk::Window*>(get_root());
+        if (root) {
+            m_details_modal = std::make_unique<AppDetailsModal>(*root);
+        }
+    }
+    if (m_details_modal) {
+        m_details_modal->show_app(app);
+    }
 }
 
 } // namespace bluehub::ui

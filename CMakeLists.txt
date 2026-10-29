@@ -23,6 +23,7 @@ add_executable(blue-hub
     src/core/flathub_service.cpp
     src/core/abpm_service.cpp
     src/ui/main_window.cpp
+    src/ui/app_details_modal.cpp
     src/ui/discover_page.cpp
     src/ui/installed_page.cpp
     src/ui/updates_page.cpp
