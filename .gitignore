@@ -1,0 +1,28 @@
+# Dossiers de compilation CMake
+build/
+bin/
+lib/
+out/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Fichiers compilés et exécutables
+*.o
+*.a
+*.so
+blue-hub
+
+# Packaging et archives
+*.rpm
+*.tar.gz
+rpmbuild/
+
+# Outils et caches IDE / Éditeurs
+.vscode/
+.idea/
+*.swp
+*~
+.cache/
+compile_commands.json
