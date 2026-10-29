@@ -10,6 +10,8 @@ public:
     MainWindow();
 
 private:
+    void on_menu_clicked();
+
     // Barre de titre / HeaderBar
     Gtk::HeaderBar m_header_bar;
     Gtk::Button m_menu_btn;
