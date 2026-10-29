@@ -67,3 +67,25 @@
     color: #000000;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
+
+/* Menu déroulant / Popover */
+.app-menu-box {
+    padding: 6px;
+}
+
+.menu-item-btn {
+    background-color: #e3e5e7;
+    border-radius: 10px;
+    padding: 10px 18px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #1a1a1a;
+    border: none;
+    box-shadow: none;
+    min-width: 230px;
+    transition: background-color 0.15s ease;
+}
+
+.menu-item-btn:hover {
+    background-color: #cfd4d8;
+}
