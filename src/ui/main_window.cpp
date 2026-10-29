@@ -6,10 +6,9 @@ MainWindow::MainWindow() {
     set_title("Blue Hub");
     set_default_size(1050, 700);
 
-    // Définir l'icône de la fenêtre
     set_icon_name("blue-hub");
 
-    // 1. Menu déroulant haut gauche (bascule dynamique hamburger / flèche)
+    // 1. Menu déroulant haut gauche
     m_menu_btn.set_icon_name("open-menu-symbolic");
     m_menu_btn.add_css_class("flat");
 
@@ -72,15 +71,14 @@ MainWindow::MainWindow() {
 
     set_titlebar(m_header_bar);
 
-    // 4. Configuration de la Stack (navigation)
+    // 4. Configuration de la Stack avec les 3 vraies pages
     m_stack.set_transition_type(Gtk::StackTransitionType::CROSSFADE);
     m_stack.set_transition_duration(200);
 
     m_stack.add(m_discover_page, "discover");
     m_stack.add(m_installed_page, "installed");
-    m_stack.add(m_updates_placeholder, "updates");
+    m_stack.add(m_updates_page, "updates");
 
-    // Onglet par défaut : Découvrir
     switch_tab("discover");
 
     set_child(m_stack);
@@ -89,7 +87,6 @@ MainWindow::MainWindow() {
 void MainWindow::switch_tab(const std::string& tab_name) {
     m_stack.set_visible_child(tab_name);
 
-    // Mise à jour de l'apparence des boutons piliers
     m_btn_discover.remove_css_class("active");
     m_btn_installed.remove_css_class("active");
     m_btn_updates.remove_css_class("active");

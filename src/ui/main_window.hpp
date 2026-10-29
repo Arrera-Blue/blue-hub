@@ -3,6 +3,7 @@
 #include <gtkmm.h>
 #include "discover_page.hpp"
 #include "installed_page.hpp"
+#include "updates_page.hpp"
 
 namespace bluehub::ui {
 
@@ -41,11 +42,11 @@ private:
     // Bouton de recherche (haut droite)
     Gtk::Button m_search_btn;
 
-    // Conteneur de pages (Stack)
+    // Conteneur Stack & les 3 pages complètes
     Gtk::Stack m_stack;
     DiscoverPage m_discover_page;
     InstalledPage m_installed_page;
-    Gtk::Box m_updates_placeholder{Gtk::Orientation::VERTICAL};
+    UpdatesPage m_updates_page;
 };
 
 } // namespace bluehub::ui

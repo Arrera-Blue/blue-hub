@@ -122,3 +122,42 @@
 .row-action-btn:hover {
     background-color: #939aa1;
 }
+
+/* Onglet Mise à jour */
+.updates-title {
+    font-size: 1.85rem;
+    font-weight: 700;
+    color: #1a1a1a;
+}
+
+.updates-section-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #2b2b2b;
+    margin-top: 4px;
+    margin-bottom: 2px;
+}
+
+.updates-separator {
+    background-color: #2b2b2b;
+    min-height: 2px;
+    margin-top: 14px;
+    margin-bottom: 14px;
+}
+
+/* Boutons bleus 'Mettre à jour' */
+.btn-update {
+    background-color: #2b7de9;
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 0.95rem;
+    border-radius: 9999px;
+    padding: 8px 26px;
+    border: none;
+    box-shadow: none;
+    transition: background-color 0.15s ease;
+}
+
+.btn-update:hover {
+    background-color: #1b6cd8;
+}
