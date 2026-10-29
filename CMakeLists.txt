@@ -21,6 +21,7 @@ pkg_check_modules(ADWAITA REQUIRED IMPORTED_TARGET libadwaita-1)
 add_executable(blue-hub
     src/main.cpp
     src/core/flathub_service.cpp
+    src/core/abpm_service.cpp
     src/ui/main_window.cpp
     src/ui/discover_page.cpp
     src/ui/installed_page.cpp

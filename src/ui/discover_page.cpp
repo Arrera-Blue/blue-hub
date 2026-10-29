@@ -77,22 +77,62 @@ DiscoverPage::DiscoverPage() {
 
     m_content_box.append(m_categories_grid);
 
-    // 3. Rangée des cartes d'applications
-    m_apps_row.set_homogeneous(true);
-    m_apps_row.append(*create_app_card("APP"));
-    m_apps_row.append(*create_app_card("APP"));
-    m_apps_row.append(*create_app_card("APP"));
-    m_apps_row.append(*create_app_card("APP"));
-
-    m_content_box.append(m_apps_row);
-
-    m_scrolled_window.set_child(m_content_box);
-    add(m_scrolled_window, "content");
-
-    // --- Configuration de la vue Hors-Ligne (AdwStatusPage) ---
+    // 3. Section des applications recommandées avec défilement de 6 en 6
     const char* const* langs = g_get_language_names();
     bool is_french = (langs && langs[0] && std::string(langs[0]).rfind("fr", 0) == 0);
 
+    m_apps_section_title.set_label(is_french ? "Applications populaires" : "Popular Applications");
+    m_apps_section_title.add_css_class("section-title");
+    m_apps_section_title.set_halign(Gtk::Align::START);
+    m_content_box.append(m_apps_section_title);
+
+    m_apps_grid.set_column_spacing(12);
+    m_apps_grid.set_row_spacing(12);
+    m_apps_grid.set_column_homogeneous(true);
+    m_content_box.append(m_apps_grid);
+
+    // Bouton de chargement supplémentaire
+    m_btn_load_more.set_label(is_french ? "Charger plus d'applications" : "Load more applications");
+    m_btn_load_more.add_css_class("pill");
+    m_btn_load_more.add_css_class("load-more-btn");
+    m_btn_load_more.set_halign(Gtk::Align::CENTER);
+    m_btn_load_more.set_cursor("pointer");
+    m_btn_load_more.signal_clicked().connect([this]() {
+        load_discover_apps_async();
+    });
+    m_content_box.append(m_btn_load_more);
+
+    m_scrolled_window.set_child(m_content_box);
+
+    // Contrôleur de molette de souris (détecte chaque impulsion vers le bas)
+    auto scroll_ctrl = Gtk::EventControllerScroll::create();
+    scroll_ctrl->set_flags(Gtk::EventControllerScroll::Flags::VERTICAL);
+    scroll_ctrl->signal_scroll().connect([this](double, double dy) -> bool {
+        if (dy > 0 && !m_is_loading_apps && m_has_more_apps) {
+            auto vadj = m_scrolled_window.get_vadjustment();
+            double val = vadj->get_value();
+            double max = vadj->get_upper() - vadj->get_page_size();
+            if (max <= 0 || val >= max - 80.0) {
+                load_discover_apps_async();
+            }
+        }
+        return false;
+    }, false);
+    m_scrolled_window.add_controller(scroll_ctrl);
+
+    // Détection par l'ascenseur
+    auto vadj = m_scrolled_window.get_vadjustment();
+    vadj->signal_value_changed().connect([this, vadj]() {
+        double val = vadj->get_value();
+        double max = vadj->get_upper() - vadj->get_page_size();
+        if (max > 0 && val >= max - 80.0 && !m_is_loading_apps && m_has_more_apps) {
+            load_discover_apps_async();
+        }
+    });
+
+    add(m_scrolled_window, "content");
+
+    // --- Configuration de la vue Hors-Ligne (AdwStatusPage) ---
     m_status_page = adw_status_page_new();
     adw_status_page_set_icon_name(ADW_STATUS_PAGE(m_status_page), "network-offline-symbolic");
     adw_status_page_set_title(ADW_STATUS_PAGE(m_status_page), 
@@ -113,14 +153,20 @@ DiscoverPage::DiscoverPage() {
 
     set_visible_child("content");
 
-    // 4. Lancement de la récupération API Flathub en arrière-plan
+    // 4. Lancement de la récupération asynchrone
     m_dispatcher.connect(sigc::mem_fun(*this, &DiscoverPage::on_trending_loaded));
     load_flathub_trending_async();
+
+    m_apps_dispatcher.connect(sigc::mem_fun(*this, &DiscoverPage::on_discover_apps_loaded));
+    load_discover_apps_async();
 }
 
 DiscoverPage::~DiscoverPage() {
     if (m_fetch_thread.joinable()) {
         m_fetch_thread.join();
+    }
+    if (m_apps_thread.joinable()) {
+        m_apps_thread.join();
     }
 }
 
@@ -141,12 +187,66 @@ void DiscoverPage::load_flathub_trending_async() {
     });
 }
 
+void DiscoverPage::load_discover_apps_async() {
+    if (m_is_loading_apps || !m_has_more_apps) {
+        return;
+    }
+    m_is_loading_apps = true;
+    m_btn_load_more.set_sensitive(false);
+
+    if (m_apps_thread.joinable()) {
+        m_apps_thread.join();
+    }
+
+    int page_to_fetch = m_current_page;
+    m_apps_thread = std::thread([this, page_to_fetch]() {
+        auto apps = core::AbpmService::get_discover_apps(page_to_fetch, 5);
+        m_incoming_apps = std::move(apps);
+        m_apps_dispatcher.emit();
+    });
+}
+
+void DiscoverPage::on_discover_apps_loaded() {
+    if (m_apps_thread.joinable()) {
+        m_apps_thread.join();
+    }
+    m_is_loading_apps = false;
+    m_btn_load_more.set_sensitive(true);
+
+    if (m_incoming_apps.empty()) {
+        m_has_more_apps = false;
+        m_btn_load_more.set_visible(false);
+        return;
+    }
+
+    for (const auto& app : m_incoming_apps) {
+        auto card = create_app_card(app);
+        int col = m_loaded_apps_count % 5;
+        int row = m_loaded_apps_count / 5;
+        m_apps_grid.attach(*card, col, row);
+        m_loaded_apps_count++;
+    }
+
+    m_current_page++;
+
+    // Si après le premier lot l'écran n'est pas encore rempli, charger la suite automatiquement
+    auto vadj = m_scrolled_window.get_vadjustment();
+    if (vadj->get_upper() <= vadj->get_page_size() && m_has_more_apps && m_loaded_apps_count < 10) {
+        load_discover_apps_async();
+    }
+}
+
 void DiscoverPage::on_retry_clicked() {
     load_flathub_trending_async();
+    if (m_loaded_apps_count == 0) {
+        m_current_page = 1;
+        m_has_more_apps = true;
+        load_discover_apps_async();
+    }
 }
 
 void DiscoverPage::on_trending_loaded() {
-    if (!m_has_connection) {
+    if (!m_has_connection && m_loaded_apps_count == 0) {
         set_visible_child("offline");
         return;
     }
@@ -210,7 +310,6 @@ Gtk::Button* DiscoverPage::create_category_card(const std::string& fr_name, cons
     icon->set_pixel_size(24);
     box->append(*icon);
 
-    // Détection de la langue du système
     const char* const* langs = g_get_language_names();
     bool is_french = (langs && langs[0] && std::string(langs[0]).rfind("fr", 0) == 0);
     std::string title = is_french ? fr_name : en_name;
@@ -223,6 +322,64 @@ Gtk::Button* DiscoverPage::create_category_card(const std::string& fr_name, cons
     return btn;
 }
 
+Gtk::Button* DiscoverPage::create_app_card(const core::DiscoverApp& app) {
+    auto btn = Gtk::make_managed<Gtk::Button>();
+    btn->add_css_class("app-card");
+    btn->set_cursor("pointer");
+
+    auto root_box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 10);
+
+    // 1. Icône de l'application
+    auto icon_box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL);
+    icon_box->add_css_class("app-card-icon-box");
+    icon_box->set_valign(Gtk::Align::CENTER);
+
+    auto img = Gtk::make_managed<Gtk::Image>();
+    img->set_pixel_size(40);
+
+    if (!app.local_icon_path.empty() && std::filesystem::exists(app.local_icon_path)) {
+        img->set(app.local_icon_path);
+    } else {
+        auto display = Gdk::Display::get_default();
+        bool has_icon = false;
+        if (display) {
+            auto theme = Gtk::IconTheme::get_for_display(display);
+            has_icon = theme && theme->has_icon(app.icon);
+        }
+
+        if (has_icon) {
+            img->set_from_icon_name(app.icon);
+        } else {
+            img->set_from_icon_name("application-x-executable");
+        }
+    }
+
+    icon_box->append(*img);
+    root_box->append(*icon_box);
+
+    // 2. Nom et description
+    auto text_box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 4);
+    text_box->set_valign(Gtk::Align::CENTER);
+    text_box->set_hexpand(true);
+
+    auto name_label = Gtk::make_managed<Gtk::Label>(app.name);
+    name_label->add_css_class("app-card-name");
+    name_label->set_halign(Gtk::Align::START);
+    name_label->set_ellipsize(Pango::EllipsizeMode::END);
+
+    auto summary_label = Gtk::make_managed<Gtk::Label>(app.summary);
+    summary_label->add_css_class("app-card-summary");
+    summary_label->set_halign(Gtk::Align::START);
+    summary_label->set_ellipsize(Pango::EllipsizeMode::END);
+
+    text_box->append(*name_label);
+    text_box->append(*summary_label);
+    root_box->append(*text_box);
+
+    btn->set_child(*root_box);
+    return btn;
+}
+
 Gtk::Box* DiscoverPage::create_slide(const std::string& name, const std::string& tagline, const std::string& icon_name, const std::string& local_icon_path, const std::string& color_class) {
     auto slide = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 24);
     slide->add_css_class("hero-slide");
@@ -230,7 +387,7 @@ Gtk::Box* DiscoverPage::create_slide(const std::string& name, const std::string&
     slide->set_hexpand(true);
     slide->set_halign(Gtk::Align::FILL);
 
-    // 1. Icône de l'application sans halo restrictif
+    // Icône sans halo restrictif
     auto icon_box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL);
     icon_box->add_css_class("hero-slide-icon-box");
     icon_box->set_valign(Gtk::Align::CENTER);
@@ -269,7 +426,7 @@ Gtk::Box* DiscoverPage::create_slide(const std::string& name, const std::string&
 
     slide->append(*icon_box);
 
-    // 2. Textes (Titre + Description)
+    // Titre + Description
     auto info_box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 8);
     info_box->set_valign(Gtk::Align::CENTER);
     info_box->set_hexpand(true);
@@ -288,30 +445,6 @@ Gtk::Box* DiscoverPage::create_slide(const std::string& name, const std::string&
     slide->append(*info_box);
 
     return slide;
-}
-
-Gtk::Box* DiscoverPage::create_app_card(const std::string& name) {
-    auto card = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 14);
-    card->add_css_class("app-card");
-
-    auto icon_box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL);
-    icon_box->add_css_class("app-icon-placeholder");
-    icon_box->set_valign(Gtk::Align::CENTER);
-    icon_box->set_halign(Gtk::Align::CENTER);
-
-    auto icon_label = Gtk::make_managed<Gtk::Label>("APP");
-    icon_label->set_expand(true);
-    icon_box->append(*icon_label);
-
-    auto title_label = Gtk::make_managed<Gtk::Label>(name);
-    title_label->add_css_class("app-title");
-    title_label->set_halign(Gtk::Align::START);
-    title_label->set_valign(Gtk::Align::CENTER);
-
-    card->append(*icon_box);
-    card->append(*title_label);
-
-    return card;
 }
 
 } // namespace bluehub::ui
