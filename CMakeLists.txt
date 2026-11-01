@@ -27,6 +27,7 @@ add_executable(blue-hub
     src/ui/discover_page.cpp
     src/ui/installed_page.cpp
     src/ui/updates_page.cpp
+    src/ui/flatpak_permissions_modal.cpp
 )
 
 target_include_directories(blue-hub PRIVATE

@@ -95,6 +95,7 @@ void MainWindow::switch_tab(const std::string& tab_name) {
         m_btn_discover.add_css_class("active");
     } else if (tab_name == "installed") {
         m_btn_installed.add_css_class("active");
+        m_installed_page.reload_apps();
     } else if (tab_name == "updates") {
         m_btn_updates.add_css_class("active");
     }

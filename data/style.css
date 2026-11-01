@@ -392,21 +392,87 @@ window.app-details-window decoration {
 }
 
 /* Lignes de l'onglet Installer */
+.installed-header-row {
+    margin-bottom: 8px;
+}
+
+.installed-count-label {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.installed-section-separator {
+    margin-top: 24px;
+    margin-bottom: 6px;
+}
+
 .installed-row {
-    background-color: #aeb4b9;
-    border-radius: 12px;
+    background-color: #f1f5f9;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 14px;
     padding: 10px 18px;
-    transition: background-color 0.15s ease;
+    transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .installed-row:hover {
-    background-color: #a3a9af;
+    background-color: #ffffff;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.installed-app-icon {
+    border-radius: 10px;
 }
 
 .installed-app-title {
-    font-size: 1.15rem;
+    font-size: 1.05rem;
     font-weight: 700;
-    color: #1a1a1a;
+    color: #0f172a;
+}
+
+.installed-app-subtitle {
+    font-size: 0.82rem;
+    color: #64748b;
+}
+
+/* Badges de provenance */
+.badge-source {
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.badge-flatpak {
+    background-color: #e0f2fe;
+    color: #0284c7;
+    border: 1px solid #bae6fd;
+}
+
+.badge-appimage {
+    background-color: #f3e8ff;
+    color: #7e22ce;
+    border: 1px solid #e9d5ff;
+}
+
+.badge-archive {
+    background-color: #ffedd5;
+    color: #c2410c;
+    border: 1px solid #fed7aa;
+}
+
+.badge-dnf {
+    background-color: #f1f5f9;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+}
+
+.badge-system {
+    background-color: #ecfdf5;
+    color: #059669;
+    border: 1px solid #a7f3d0;
 }
 
 .row-action-btn {
@@ -415,13 +481,30 @@ window.app-details-window decoration {
     background: transparent;
     border: none;
     box-shadow: none;
-    color: #1a1a1a;
+    color: #475569;
     min-width: 38px;
     min-height: 38px;
+    transition: all 0.15s ease;
 }
 
 .row-action-btn:hover {
-    background-color: #939aa1;
+    background-color: #e2e8f0;
+    color: #0f172a;
+}
+
+.row-action-btn.perm-btn:hover {
+    background-color: #e0f2fe;
+    color: #0284c7;
+}
+
+.row-action-btn.icon-btn:hover {
+    background-color: #f3e8ff;
+    color: #7e22ce;
+}
+
+.row-action-btn.delete-btn:hover {
+    background-color: #fee2e2;
+    color: #dc2626;
 }
 
 /* Onglet Mise à jour */

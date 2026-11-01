@@ -1,80 +1,267 @@
 #include "installed_page.hpp"
+#include <filesystem>
+#include <thread>
+#include <algorithm>
 
 namespace bluehub::ui {
 
 InstalledPage::InstalledPage() {
     set_policy(Gtk::PolicyType::NEVER, Gtk::PolicyType::AUTOMATIC);
 
-    // Marges extérieures identiques à la page Découvrir
-    m_content_box.set_margin_start(36);
-    m_content_box.set_margin_end(36);
-    m_content_box.set_margin_top(24);
-    m_content_box.set_margin_bottom(30);
+    m_root_box.set_margin_start(36);
+    m_root_box.set_margin_end(36);
+    m_root_box.set_margin_top(24);
+    m_root_box.set_margin_bottom(30);
 
-    // Reproduction exacte des 4 lignes de votre maquette
-    m_content_box.append(*create_installed_row("FLATPAK APP", AppSourceType::FLATPAK));
-    m_content_box.append(*create_installed_row("RPM APP", AppSourceType::RPM));
-    m_content_box.append(*create_installed_row("DNF APP", AppSourceType::DNF));
-    m_content_box.append(*create_installed_row("ARCHIVE APP", AppSourceType::ARCHIVE));
+    // 1. En-tête des applications utilisateur
+    m_user_header_box.add_css_class("installed-header-row");
+    m_user_count_label.add_css_class("installed-count-label");
+    m_user_count_label.set_halign(Gtk::Align::START);
+    m_user_count_label.set_hexpand(true);
+    m_user_count_label.set_label("Chargement des applications...");
+    m_user_header_box.append(m_user_count_label);
 
-    set_child(m_content_box);
+    m_root_box.append(m_user_header_box);
+    m_root_box.append(m_user_list_box);
+
+    // 2. En-tête de la catégorie Utilitaires système (en dessous)
+    m_system_header_box.add_css_class("installed-section-separator");
+    m_system_count_label.add_css_class("installed-count-label");
+    m_system_count_label.set_halign(Gtk::Align::START);
+    m_system_count_label.set_hexpand(true);
+    m_system_count_label.set_label("Utilitaires système");
+    m_system_header_box.append(m_system_count_label);
+
+    m_root_box.append(m_system_header_box);
+    m_root_box.append(m_system_list_box);
+
+    set_child(m_root_box);
+
+    m_dispatcher.connect(sigc::mem_fun(*this, &InstalledPage::render_app_list));
+
+    reload_apps();
 }
 
-Gtk::Box* InstalledPage::create_installed_row(const std::string& name, AppSourceType type) {
+void InstalledPage::reload_apps() {
+    std::thread([this]() {
+        auto fetched = core::AbpmService::get_installed_apps();
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_apps = std::move(fetched);
+        }
+        m_dispatcher.emit();
+    }).detach();
+}
+
+void InstalledPage::render_app_list() {
+    while (auto child = m_user_list_box.get_first_child()) {
+        m_user_list_box.remove(*child);
+    }
+    while (auto child = m_system_list_box.get_first_child()) {
+        m_system_list_box.remove(*child);
+    }
+
+    std::vector<core::InstalledApp> current_apps;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        current_apps = m_apps;
+    }
+
+    // Tri par ordre alphabétique insensible à la casse et gérant les accents français
+    std::sort(current_apps.begin(), current_apps.end(), [](const core::InstalledApp& a, const core::InstalledApp& b) {
+        return g_utf8_collate(a.name.c_str(), b.name.c_str()) < 0;
+    });
+
+    size_t user_count = 0;
+    size_t system_count = 0;
+
+    for (const auto& app : current_apps) {
+        if (app.is_system) {
+            m_system_list_box.append(*create_installed_row(app));
+            system_count++;
+        } else {
+            m_user_list_box.append(*create_installed_row(app));
+            user_count++;
+        }
+    }
+
+    m_user_count_label.set_label("Applications installées (" + std::to_string(user_count) + ")");
+
+    if (system_count > 0) {
+        m_system_count_label.set_label("Utilitaires système (" + std::to_string(system_count) + ")");
+        m_system_header_box.set_visible(true);
+        m_system_list_box.set_visible(true);
+    } else {
+        m_system_header_box.set_visible(false);
+        m_system_list_box.set_visible(false);
+    }
+}
+
+Gtk::Box* InstalledPage::create_installed_row(const core::InstalledApp& app) {
     auto row = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 16);
     row->add_css_class("installed-row");
 
-    // 1. Placeholder de l'icône
-    auto icon_box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL);
-    icon_box->add_css_class("app-icon-placeholder");
-    icon_box->set_valign(Gtk::Align::CENTER);
-    icon_box->set_halign(Gtk::Align::CENTER);
+    // 1. Icône de l'application
+    auto icon_img = Gtk::make_managed<Gtk::Image>();
+    icon_img->set_pixel_size(44);
+    icon_img->add_css_class("installed-app-icon");
 
-    auto icon_label = Gtk::make_managed<Gtk::Label>("APP");
-    icon_label->set_expand(true);
-    icon_box->append(*icon_label);
-    row->append(*icon_box);
+    if (!app.local_icon_path.empty() && std::filesystem::exists(app.local_icon_path)) {
+        icon_img->set(app.local_icon_path);
+    } else {
+        auto display = Gdk::Display::get_default();
+        bool has_icon = false;
+        if (display) {
+            auto theme = Gtk::IconTheme::get_for_display(display);
+            has_icon = theme && theme->has_icon(app.icon);
+        }
+        if (has_icon) {
+            icon_img->set_from_icon_name(app.icon);
+        } else {
+            icon_img->set_from_icon_name("application-x-executable");
+        }
+    }
+    row->append(*icon_img);
 
-    // 2. Nom de l'application
-    auto title_label = Gtk::make_managed<Gtk::Label>(name);
+    // 2. Nom, badge éventuel et version
+    auto text_box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 4);
+    text_box->set_valign(Gtk::Align::CENTER);
+    text_box->set_hexpand(true);
+
+    auto title_label = Gtk::make_managed<Gtk::Label>(app.name);
     title_label->add_css_class("installed-app-title");
     title_label->set_halign(Gtk::Align::START);
-    title_label->set_valign(Gtk::Align::CENTER);
-    title_label->set_hexpand(true);
-    row->append(*title_label);
+    text_box->append(*title_label);
 
-    // 3. Boutons d'actions à droite
+    auto sub_box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
+
+    // Badge de source UNIQUEMENT pour Flatpak, Archive et AppImage
+    // Les paquets standards DNF et RPM n'ont pas de badge pour ne pas encombrer la vue
+    if (app.source == "flatpak") {
+        auto badge = Gtk::make_managed<Gtk::Label>("Flatpak");
+        badge->add_css_class("badge-source");
+        badge->add_css_class("badge-flatpak");
+        sub_box->append(*badge);
+    } else if (app.source == "archive") {
+        auto badge = Gtk::make_managed<Gtk::Label>("Archive");
+        badge->add_css_class("badge-source");
+        badge->add_css_class("badge-archive");
+        sub_box->append(*badge);
+    } else if (app.source == "appimage") {
+        auto badge = Gtk::make_managed<Gtk::Label>("AppImage");
+        badge->add_css_class("badge-source");
+        badge->add_css_class("badge-appimage");
+        sub_box->append(*badge);
+    }
+
+    if (!app.version.empty()) {
+        auto ver_label = Gtk::make_managed<Gtk::Label>("v" + app.version);
+        ver_label->add_css_class("installed-app-subtitle");
+        sub_box->append(*ver_label);
+    }
+    text_box->append(*sub_box);
+    row->append(*text_box);
+
+    // 3. Actions contextuelles
     auto actions_box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
     actions_box->set_valign(Gtk::Align::CENTER);
 
-    // Cas Flatpak : Bouton permissions (clé)
-    if (type == AppSourceType::FLATPAK) {
+    // Action A : Permissions Flatpak
+    if (app.source == "flatpak") {
         auto perm_btn = Gtk::make_managed<Gtk::Button>();
-        perm_btn->set_icon_name("dialog-password-symbolic");
+        perm_btn->set_icon_name("preferences-system-symbolic");
         perm_btn->add_css_class("row-action-btn");
-        perm_btn->set_tooltip_text("Gérer les permissions Flatpak");
+        perm_btn->add_css_class("perm-btn");
+        perm_btn->set_cursor("pointer");
+        perm_btn->set_tooltip_text("Modifier les autorisations Flatpak");
+        perm_btn->signal_clicked().connect([this, app]() { on_modify_permissions(app); });
         actions_box->append(*perm_btn);
     }
 
-    // Cas Archive ou AppImage : Bouton changer l'icône
-    if (type == AppSourceType::ARCHIVE || type == AppSourceType::APPIMAGE) {
+    // Action B : Modifier l'icône (AppImage ou Archive)
+    if (app.source == "appimage" || app.source == "archive") {
         auto icon_btn = Gtk::make_managed<Gtk::Button>();
         icon_btn->set_icon_name("insert-image-symbolic");
         icon_btn->add_css_class("row-action-btn");
-        icon_btn->set_tooltip_text("Changer l'icône de l'application");
+        icon_btn->add_css_class("icon-btn");
+        icon_btn->set_cursor("pointer");
+        icon_btn->set_tooltip_text("Modifier l'icône de l'application");
+        icon_btn->signal_clicked().connect([this, app]() { on_change_icon(app); });
         actions_box->append(*icon_btn);
     }
 
-    // Bouton de désinstallation (poubelle)
-    auto delete_btn = Gtk::make_managed<Gtk::Button>();
-    delete_btn->set_icon_name("user-trash-symbolic");
-    delete_btn->add_css_class("row-action-btn");
-    delete_btn->set_tooltip_text("Désinstaller");
-    actions_box->append(*delete_btn);
+    // Action C : Désinstallation (uniquement pour les applications non-système)
+    if (!app.is_system) {
+        auto delete_btn = Gtk::make_managed<Gtk::Button>();
+        delete_btn->set_icon_name("user-trash-symbolic");
+        delete_btn->add_css_class("row-action-btn");
+        delete_btn->add_css_class("delete-btn");
+        delete_btn->set_cursor("pointer");
+        delete_btn->set_tooltip_text("Désinstaller " + app.name);
+        delete_btn->signal_clicked().connect([this, app]() { on_uninstall_requested(app); });
+        actions_box->append(*delete_btn);
+    }
 
     row->append(*actions_box);
-
     return row;
+}
+
+void InstalledPage::on_modify_permissions(const core::InstalledApp& app) {
+    auto root = dynamic_cast<Gtk::Window*>(get_root());
+    if (root) {
+        if (!m_permissions_modal) {
+            m_permissions_modal = std::make_unique<FlatpakPermissionsModal>(*root);
+        }
+        m_permissions_modal->show_permissions(app);
+    }
+}
+
+void InstalledPage::on_change_icon(const core::InstalledApp& app) {
+    auto file_dialog = Gtk::FileDialog::create();
+    file_dialog->set_title("Sélectionner une nouvelle icône pour " + app.name);
+
+    auto filter = Gtk::FileFilter::create();
+    filter->set_name("Images (*.png, *.svg, *.jpg)");
+    filter->add_mime_type("image/png");
+    filter->add_mime_type("image/svg+xml");
+    filter->add_mime_type("image/jpeg");
+
+    auto filters = Gio::ListStore<Gtk::FileFilter>::create();
+    filters->append(filter);
+    file_dialog->set_filters(filters);
+
+    file_dialog->open([this, app, file_dialog](const Glib::RefPtr<Gio::AsyncResult>& res) {
+        try {
+            auto file = file_dialog->open_finish(res);
+            if (file) {
+                std::string path = file->get_path();
+                if (!path.empty()) {
+                    core::AbpmService::set_app_icon(app.package, path);
+                    reload_apps();
+                }
+            }
+        } catch (...) {}
+    });
+}
+
+void InstalledPage::on_uninstall_requested(const core::InstalledApp& app) {
+    auto dialog = Gtk::AlertDialog::create("Désinstaller " + app.name + " ?");
+    dialog->set_detail("Cette action supprimera définitivement l'application via abpm.");
+    dialog->set_buttons({"Annuler", "Désinstaller"});
+    dialog->set_cancel_button(0);
+    dialog->set_default_button(1);
+
+    dialog->choose([this, app, dialog](const Glib::RefPtr<Gio::AsyncResult>& res) {
+        try {
+            int btn = dialog->choose_finish(res);
+            if (btn == 1) {
+                std::thread([this, app]() {
+                    core::AbpmService::uninstall_app(app.package, app.source);
+                    reload_apps();
+                }).detach();
+            }
+        } catch (...) {}
+    });
 }
 
 } // namespace bluehub::ui
