@@ -98,6 +98,74 @@ namespace {
     }
 }
 
+std::string AbpmService::find_local_app_icon(const std::string& icon_name, const std::string& app_id, const std::string& package) {
+    std::vector<std::string> search_dirs = {
+        "/var/lib/flatpak/appstream/flathub/x86_64/active/icons/128x128",
+        "/var/lib/flatpak/appstream/flathub/x86_64/active/icons/64x64",
+        "/var/lib/flatpak/appstream/fedora/x86_64/icons/128x128",
+        "/var/lib/flatpak/appstream/fedora/x86_64/icons/64x64",
+        "/usr/share/pixmaps",
+        "/usr/share/icons/hicolor/128x128/apps",
+        "/usr/share/icons/hicolor/64x64/apps",
+        "/usr/share/icons/hicolor/48x48/apps",
+        "/usr/share/icons/hicolor/scalable/apps",
+        "/usr/share/app-info/icons",
+        "/var/cache/app-info/icons"
+    };
+
+    // Parcourir aussi dynamiquement les dossiers sous flathub en cas d'arborescence spécifique
+    std::string flathub_base = "/var/lib/flatpak/appstream/flathub/x86_64";
+    if (std::filesystem::exists(flathub_base)) {
+        try {
+            for (const auto& entry : std::filesystem::directory_iterator(flathub_base)) {
+                if (entry.is_directory() || entry.is_symlink()) {
+                    std::string p128 = entry.path().string() + "/icons/128x128";
+                    std::string p64 = entry.path().string() + "/icons/64x64";
+                    if (std::filesystem::exists(p128)) search_dirs.push_back(p128);
+                    if (std::filesystem::exists(p64)) search_dirs.push_back(p64);
+                }
+            }
+        } catch (...) {}
+    }
+
+    std::vector<std::string> candidates;
+    if (!icon_name.empty()) {
+        candidates.push_back(icon_name);
+        if (icon_name.size() > 4 && icon_name.rfind(".png") == icon_name.size() - 4) {
+            candidates.push_back(icon_name.substr(0, icon_name.size() - 4));
+        } else {
+            candidates.push_back(icon_name + ".png");
+        }
+    }
+    if (!app_id.empty()) {
+        candidates.push_back(app_id + ".png");
+        candidates.push_back(app_id);
+        if (app_id.size() > 8 && app_id.rfind(".desktop") == app_id.size() - 8) {
+            candidates.push_back(app_id.substr(0, app_id.size() - 8) + ".png");
+            candidates.push_back(app_id.substr(0, app_id.size() - 8));
+        }
+    }
+    if (!package.empty()) {
+        candidates.push_back(package + ".png");
+        candidates.push_back(package);
+    }
+
+    for (const auto& dir : search_dirs) {
+        if (!std::filesystem::exists(dir)) continue;
+        for (const auto& c : candidates) {
+            std::string path = dir + "/" + c;
+            if (std::filesystem::exists(path) && !std::filesystem::is_directory(path)) {
+                return path;
+            }
+            std::string path_svg = dir + "/" + c + ".svg";
+            if (std::filesystem::exists(path_svg) && !std::filesystem::is_directory(path_svg)) {
+                return path_svg;
+            }
+        }
+    }
+    return "";
+}
+
 std::vector<DiscoverApp> AbpmService::get_discover_apps(int page, int per_page) {
     std::vector<DiscoverApp> apps;
 
@@ -150,6 +218,11 @@ std::vector<DiscoverApp> AbpmService::get_discover_apps(int page, int per_page) 
                 std::string local_path = cache_dir + "/" + id + ".png";
                 if (download_file(icon, local_path)) {
                     app.local_icon_path = local_path;
+                }
+            } else {
+                std::string local_icon = find_local_app_icon(icon, id, app.package);
+                if (!local_icon.empty()) {
+                    app.local_icon_path = local_icon;
                 }
             }
 

@@ -12,10 +12,15 @@ int main(int argc, char* argv[]) {
     app->signal_startup().connect([app]() {
         auto display = Gdk::Display::get_default();
 
-        // Enregistrement du dossier d'icônes local auprès de GTK
+        // Enregistrement des dossiers d'icônes auprès de GTK
         if (display) {
             auto icon_theme = Gtk::IconTheme::get_for_display(display);
             icon_theme->add_search_path("data/icons");
+            icon_theme->add_search_path("/var/lib/flatpak/appstream/flathub/x86_64/active/icons/128x128");
+            icon_theme->add_search_path("/var/lib/flatpak/appstream/flathub/x86_64/active/icons/64x64");
+            icon_theme->add_search_path("/var/lib/flatpak/appstream/fedora/x86_64/icons/128x128");
+            icon_theme->add_search_path("/var/lib/flatpak/appstream/fedora/x86_64/icons/64x64");
+            icon_theme->add_search_path("/usr/share/pixmaps");
         }
 
         // Chargement du style CSS

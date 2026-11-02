@@ -79,6 +79,11 @@ MainWindow::MainWindow() {
     m_stack.add(m_installed_page, "installed");
     m_stack.add(m_updates_page, "updates");
 
+    m_discover_page.signal_install_app().connect([this](const core::DiscoverApp& app) {
+        switch_tab("installed");
+        m_installed_page.start_installation(app);
+    });
+
     switch_tab("discover");
 
     set_child(m_stack);

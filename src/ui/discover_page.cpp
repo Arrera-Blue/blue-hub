@@ -265,6 +265,20 @@ void DiscoverPage::on_trending_loaded() {
     // Ajouter les vraies applications Flathub sans le badge
     for (const auto& app : m_fetched_apps) {
         auto slide = create_slide(app.name, app.summary, app.id, app.local_icon_path, app.color_class);
+        slide->set_cursor("pointer");
+        auto click = Gtk::GestureClick::create();
+        click->signal_released().connect([this, app](int, double, double) {
+            core::DiscoverApp d_app;
+            d_app.id = app.id;
+            d_app.name = app.name;
+            d_app.summary = app.summary;
+            d_app.icon = app.id;
+            d_app.source = "flatpak";
+            d_app.package = app.id;
+            d_app.local_icon_path = app.local_icon_path;
+            open_app_details(d_app);
+        });
+        slide->add_controller(click);
         adw_carousel_append(ADW_CAROUSEL(m_carousel_widget), GTK_WIDGET(slide->gobj()));
     }
 }
@@ -337,19 +351,34 @@ Gtk::Button* DiscoverPage::create_app_card(const core::DiscoverApp& app) {
     auto img = Gtk::make_managed<Gtk::Image>();
     img->set_pixel_size(40);
 
-    if (!app.local_icon_path.empty() && std::filesystem::exists(app.local_icon_path)) {
-        img->set(app.local_icon_path);
+    std::string icon_path = app.local_icon_path;
+    if (icon_path.empty() || !std::filesystem::exists(icon_path)) {
+        icon_path = core::AbpmService::find_local_app_icon(app.icon, app.id, app.package);
+    }
+
+    if (!icon_path.empty() && std::filesystem::exists(icon_path)) {
+        img->set(icon_path);
     } else {
         auto display = Gdk::Display::get_default();
+        std::string clean_icon = app.icon;
+        if (clean_icon.size() > 4 && clean_icon.rfind(".png") == clean_icon.size() - 4) {
+            clean_icon = clean_icon.substr(0, clean_icon.size() - 4);
+        }
         bool has_icon = false;
         if (display) {
             auto theme = Gtk::IconTheme::get_for_display(display);
-            has_icon = theme && theme->has_icon(app.icon);
+            if (theme) {
+                if (theme->has_icon(clean_icon)) {
+                    img->set_from_icon_name(clean_icon);
+                    has_icon = true;
+                } else if (theme->has_icon(app.id)) {
+                    img->set_from_icon_name(app.id);
+                    has_icon = true;
+                }
+            }
         }
 
-        if (has_icon) {
-            img->set_from_icon_name(app.icon);
-        } else {
+        if (!has_icon) {
             img->set_from_icon_name("application-x-executable");
         }
     }
@@ -456,6 +485,9 @@ void DiscoverPage::open_app_details(const core::DiscoverApp& app) {
         auto root = dynamic_cast<Gtk::Window*>(get_root());
         if (root) {
             m_details_modal = std::make_unique<AppDetailsModal>(*root);
+            m_details_modal->signal_install_requested().connect([this](const core::DiscoverApp& d_app) {
+                m_signal_install_app.emit(d_app);
+            });
         }
     }
     if (m_details_modal) {

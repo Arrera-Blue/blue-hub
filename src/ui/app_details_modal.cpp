@@ -244,19 +244,34 @@ void AppDetailsModal::show_app(const core::DiscoverApp& app, bool is_installed, 
     m_carousel_container.set_visible(false);
 
     // Chargement de l'icône
-    if (!app.local_icon_path.empty() && std::filesystem::exists(app.local_icon_path)) {
-        m_app_icon.set(app.local_icon_path);
+    std::string icon_path = app.local_icon_path;
+    if (icon_path.empty() || !std::filesystem::exists(icon_path)) {
+        icon_path = core::AbpmService::find_local_app_icon(app.icon, app.id, app.package);
+    }
+
+    if (!icon_path.empty() && std::filesystem::exists(icon_path)) {
+        m_app_icon.set(icon_path);
     } else {
         auto display = Gdk::Display::get_default();
+        std::string clean_icon = app.icon;
+        if (clean_icon.size() > 4 && clean_icon.rfind(".png") == clean_icon.size() - 4) {
+            clean_icon = clean_icon.substr(0, clean_icon.size() - 4);
+        }
         bool has_icon = false;
         if (display) {
             auto theme = Gtk::IconTheme::get_for_display(display);
-            has_icon = theme && theme->has_icon(app.icon);
+            if (theme) {
+                if (theme->has_icon(clean_icon)) {
+                    m_app_icon.set_from_icon_name(clean_icon);
+                    has_icon = true;
+                } else if (theme->has_icon(app.id)) {
+                    m_app_icon.set_from_icon_name(app.id);
+                    has_icon = true;
+                }
+            }
         }
 
-        if (has_icon) {
-            m_app_icon.set_from_icon_name(app.icon);
-        } else {
+        if (!has_icon) {
             m_app_icon.set_from_icon_name("application-x-executable");
         }
     }
@@ -444,8 +459,8 @@ void AppDetailsModal::on_install_clicked() {
             } catch (...) {}
         });
     } else {
-        m_btn_install.set_sensitive(false);
-        m_btn_install.set_label("Installation...");
+        m_signal_install_requested.emit(m_current_app);
+        hide();
     }
 }
 

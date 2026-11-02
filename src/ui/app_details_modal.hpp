@@ -17,6 +17,7 @@ public:
     void show_app(const core::InstalledApp& app);
 
     sigc::signal<void()>& signal_app_uninstalled() { return m_signal_app_uninstalled; }
+    sigc::signal<void(const core::DiscoverApp&)>& signal_install_requested() { return m_signal_install_requested; }
 
 private:
     void on_install_clicked();
@@ -71,6 +72,7 @@ private:
     std::string m_fetched_package;
 
     sigc::signal<void()> m_signal_app_uninstalled;
+    sigc::signal<void(const core::DiscoverApp&)> m_signal_install_requested;
     Glib::Dispatcher m_uninstall_dispatcher;
 };
 

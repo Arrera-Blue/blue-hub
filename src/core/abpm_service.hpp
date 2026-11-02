@@ -43,6 +43,7 @@ class AbpmService {
 public:
     static std::vector<DiscoverApp> get_discover_apps(int page = 1, int per_page = 6);
     static AppDetails get_app_details(const DiscoverApp& app);
+    static std::string find_local_app_icon(const std::string& icon_name, const std::string& app_id = "", const std::string& package = "");
 
     // Gestion des applications installées
     static std::vector<InstalledApp> get_installed_apps(bool force_refresh = false);
