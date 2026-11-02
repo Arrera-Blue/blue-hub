@@ -5,7 +5,8 @@
 #include <mutex>
 #include <memory>
 #include "core/abpm_service.hpp"
-#include "flatpak_permissions_modal.hpp" // <-- AJOUT
+#include "flatpak_permissions_modal.hpp"
+#include "app_details_modal.hpp"
 
 namespace bluehub::ui {
 
@@ -16,6 +17,7 @@ public:
     void reload_apps();
 
 private:
+    void open_app_details(const core::InstalledApp& app);
     void on_modify_permissions(const core::InstalledApp& app);
     void on_change_icon(const core::InstalledApp& app);
     void on_uninstall_requested(const core::InstalledApp& app);
@@ -37,7 +39,8 @@ private:
     std::mutex m_mutex;
     Glib::Dispatcher m_dispatcher;
 
-    std::unique_ptr<FlatpakPermissionsModal> m_permissions_modal; // <-- AJOUT
+    std::unique_ptr<FlatpakPermissionsModal> m_permissions_modal;
+    std::unique_ptr<AppDetailsModal> m_details_modal;
 };
 
 } // namespace bluehub::ui

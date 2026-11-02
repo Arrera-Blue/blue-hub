@@ -45,9 +45,11 @@ public:
     static AppDetails get_app_details(const DiscoverApp& app);
 
     // Gestion des applications installées
-    static std::vector<InstalledApp> get_installed_apps();
+    static std::vector<InstalledApp> get_installed_apps(bool force_refresh = false);
+    static bool is_app_installed(const std::string& id, const std::string& package, bool& out_is_system, std::string& out_source, std::string& out_package);
     static bool set_app_icon(const std::string& package, const std::string& icon_path);
     static bool uninstall_app(const std::string& package, const std::string& source);
+    static void invalidate_installed_cache();
 };
 
 } // namespace bluehub::core

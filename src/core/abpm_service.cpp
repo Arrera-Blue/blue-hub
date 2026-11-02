@@ -6,10 +6,15 @@
 #include <curl/curl.h>
 #include <iostream>
 #include <unordered_map>
+#include <mutex>
 
 namespace bluehub::core {
 
 namespace {
+    std::vector<InstalledApp> s_installed_cache;
+    std::mutex s_installed_mutex;
+    bool s_has_installed_cache = false;
+
     std::string extract_json_field(const std::string& obj, const std::string& key) {
         std::string pattern = "\"" + key + "\"\\s*:\\s*\"([^\"]*)\"";
         std::regex reg(pattern);
@@ -340,7 +345,14 @@ AppDetails AbpmService::get_app_details(const DiscoverApp& app) {
     return details;
 }
 
-std::vector<InstalledApp> AbpmService::get_installed_apps() {
+std::vector<InstalledApp> AbpmService::get_installed_apps(bool force_refresh) {
+    if (!force_refresh) {
+        std::lock_guard<std::mutex> lock(s_installed_mutex);
+        if (s_has_installed_cache && !s_installed_cache.empty()) {
+            return s_installed_cache;
+        }
+    }
+
     std::vector<InstalledApp> apps;
 
     // 1. Tenter la sortie JSON directe de abpm list
@@ -370,6 +382,9 @@ std::vector<InstalledApp> AbpmService::get_installed_apps() {
                 }
             }
             if (!apps.empty()) {
+                std::lock_guard<std::mutex> lock(s_installed_mutex);
+                s_installed_cache = apps;
+                s_has_installed_cache = true;
                 return apps;
             }
         }
@@ -381,31 +396,19 @@ std::vector<InstalledApp> AbpmService::get_installed_apps() {
         std::string flatpak_out;
         int status = 0;
         Glib::spawn_command_line_sync("flatpak list --app --columns=application,name,version", &flatpak_out, nullptr, &status);
-        if (status == 0 && !flatpak_out.empty()) {
+        if (status == 0) {
             std::istringstream stream(flatpak_out);
             std::string line;
             while (std::getline(stream, line)) {
                 if (line.empty()) continue;
-                size_t t1 = line.find('\t');
-                std::string app_id, name, version;
-                if (t1 != std::string::npos) {
-                    app_id = line.substr(0, t1);
-                    size_t t2 = line.find('\t', t1 + 1);
-                    if (t2 != std::string::npos) {
-                        name = line.substr(t1 + 1, t2 - t1 - 1);
-                        version = line.substr(t2 + 1);
-                    } else {
-                        name = line.substr(t1 + 1);
-                    }
-                } else {
-                    app_id = line;
-                    name = line;
-                }
+                std::istringstream liness(line);
+                std::string app_id, name, ver;
+                liness >> app_id >> name >> ver;
                 if (!app_id.empty()) {
                     InstalledApp app;
                     app.id = app_id;
                     app.name = name.empty() ? app_id : name;
-                    app.version = version;
+                    app.version = ver;
                     app.source = "flatpak";
                     app.icon = app_id;
                     app.package = app_id;
@@ -416,95 +419,54 @@ std::vector<InstalledApp> AbpmService::get_installed_apps() {
         }
     } catch (...) {}
 
-    // B. Archives et AppImages (/var/lib/abpm)
-    for (const auto& entry : {std::make_pair("/var/lib/abpm/archives.json", "archive"),
-                              std::make_pair("/var/lib/abpm/appimages.json", "appimage")}) {
-        if (std::filesystem::exists(entry.first)) {
-            try {
-                std::ifstream f(entry.first);
-                std::string content((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-                std::regex obj_regex(R"raw(\{[^{}]+\})raw");
-                auto it = std::sregex_iterator(content.begin(), content.end(), obj_regex);
-                auto end = std::sregex_iterator();
-                for (; it != end; ++it) {
-                    std::string b = it->str();
-                    std::string name = extract_json_field(b, "name");
-                    std::string ver = extract_json_field(b, "version");
-                    if (!name.empty()) {
-                        InstalledApp app;
-                        app.id = name;
-                        app.name = name;
-                        app.version = ver;
-                        app.source = entry.second;
-                        app.package = name;
-                        app.icon = name;
-                        app.is_system = false;
-                        apps.push_back(app);
-                    }
-                }
-            } catch (...) {}
-        }
+    {
+        std::lock_guard<std::mutex> lock(s_installed_mutex);
+        s_installed_cache = apps;
+        s_has_installed_cache = true;
     }
+    return apps;
+}
 
-    // C. Applications DNF / Desktop
-    static const std::unordered_set<std::string> system_apps = {
-        "org.gnome.Settings.desktop",
-        "org.gnome.Nautilus.desktop",
-        "org.gnome.Ptyxis.desktop",
-        "org.gnome.Terminal.desktop",
-        "org.gnome.DiskUtility.desktop",
-        "org.gnome.Extensions.desktop",
-        "org.gnome.Tour.desktop"
+void AbpmService::invalidate_installed_cache() {
+    std::lock_guard<std::mutex> lock(s_installed_mutex);
+    s_has_installed_cache = false;
+    s_installed_cache.clear();
+}
+
+bool AbpmService::is_app_installed(const std::string& id, const std::string& package, bool& out_is_system, std::string& out_source, std::string& out_package) {
+    auto strip_desktop = [](std::string s) {
+        if (s.size() > 8 && s.rfind(".desktop") == s.size() - 8) {
+            s.resize(s.size() - 8);
+        }
+        return s;
     };
 
-    if (std::filesystem::exists("/usr/share/applications")) {
-        for (const auto& entry : std::filesystem::directory_iterator("/usr/share/applications")) {
-            if (!entry.is_regular_file() || entry.path().extension() != ".desktop") continue;
-            std::string filename = entry.path().filename().string();
-            if (filename.find("gnome-") == 0 && filename.find("-panel.desktop") != std::string::npos) continue;
-            if (filename == "mimeinfo.cache" || filename == "antigravity.desktop") continue;
-
-            std::ifstream f(entry.path());
-            std::string line;
-            bool in_entry = false;
-            bool no_display = false;
-            std::string name, name_fr, icon, exec;
-
-            while (std::getline(f, line)) {
-                if (line == "[Desktop Entry]") { in_entry = true; continue; }
-                else if (!line.empty() && line[0] == '[' && in_entry) break;
-                if (!in_entry) continue;
-
-                if (line == "NoDisplay=true" || line == "NoDisplay=True") { no_display = true; break; }
-                if (line.rfind("Name[fr]=", 0) == 0) name_fr = line.substr(9);
-                else if (line.rfind("Name=", 0) == 0 && name.empty()) name = line.substr(5);
-                else if (line.rfind("Icon=", 0) == 0) icon = line.substr(5);
-                else if (line.rfind("Exec=", 0) == 0) exec = line.substr(5);
+    auto iequals = [&strip_desktop](std::string a, std::string b) {
+        a = strip_desktop(a);
+        b = strip_desktop(b);
+        if (a.empty() || b.empty() || a.size() != b.size()) return false;
+        for (size_t i = 0; i < a.size(); ++i) {
+            if (std::tolower(static_cast<unsigned char>(a[i])) !=
+                std::tolower(static_cast<unsigned char>(b[i]))) {
+                return false;
             }
+        }
+        return true;
+    };
 
-            if (no_display || exec.empty()) continue;
-
-            std::string final_name = !name_fr.empty() ? name_fr : name;
-            if (final_name.empty()) continue;
-
-            InstalledApp app;
-            app.id = filename.substr(0, filename.size() - 8);
-            app.name = final_name;
-            app.icon = icon.empty() ? app.id : icon;
-            app.source = "dnf";
-            app.package = app.id;
-            app.is_system = (system_apps.find(filename) != system_apps.end());
-
-            apps.push_back(app);
+    auto apps = get_installed_apps(false);
+    for (const auto& a : apps) {
+        if (iequals(a.id, id) ||
+            iequals(a.package, package) ||
+            (!id.empty() && iequals(a.package, id)) ||
+            (!package.empty() && iequals(a.id, package))) {
+            out_is_system = a.is_system;
+            out_source = a.source;
+            out_package = a.package;
+            return true;
         }
     }
-
-    std::sort(apps.begin(), apps.end(), [](const InstalledApp& a, const InstalledApp& b) {
-        if (a.is_system != b.is_system) return !a.is_system;
-        return a.name < b.name;
-    });
-
-    return apps;
+    return false;
 }
 
 bool AbpmService::set_app_icon(const std::string& package, const std::string& icon_path) {
@@ -519,6 +481,7 @@ bool AbpmService::set_app_icon(const std::string& package, const std::string& ic
 }
 
 bool AbpmService::uninstall_app(const std::string& package, const std::string& source) {
+    invalidate_installed_cache();
     std::string cmd;
     if (source == "flatpak") {
         cmd = "flatpak uninstall -y " + package;

@@ -301,6 +301,24 @@ window.app-details-window decoration {
     box-shadow: 0 4px 14px rgba(37, 99, 235, 0.38);
 }
 
+.modal-install-btn.modal-uninstall-btn {
+    background-color: #dc2626;
+    color: #ffffff;
+    box-shadow: 0 2px 6px rgba(220, 38, 38, 0.25);
+}
+
+.modal-install-btn.modal-uninstall-btn:hover {
+    background-color: #b91c1c;
+    box-shadow: 0 4px 14px rgba(220, 38, 38, 0.38);
+}
+
+.modal-install-btn:disabled {
+    background-color: #94a3b8;
+    color: #f1f5f9;
+    box-shadow: none;
+    opacity: 0.7;
+}
+
 /* Carrousel de captures d'écran de la modale */
 .modal-carousel-container {
     margin-top: 4px;

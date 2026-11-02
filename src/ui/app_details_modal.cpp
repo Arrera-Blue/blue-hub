@@ -28,7 +28,6 @@ namespace {
             auto second_dot = app_id.find('.', first_dot + 1);
             if (second_dot != std::string::npos) {
                 std::string dev = app_id.substr(first_dot + 1, second_dot - first_dot - 1);
-                // Si c'est io.github.auteur.app, on extrait le nom de l'auteur
                 if (dev == "github" || dev == "gitlab" || dev == "codeberg") {
                     auto third_dot = app_id.find('.', second_dot + 1);
                     if (third_dot != std::string::npos) {
@@ -55,17 +54,16 @@ AppDetailsModal::AppDetailsModal(Gtk::Window& parent) {
     set_modal(true);
     set_default_size(800, 640);
     set_resizable(false);
-    set_decorated(false); // Fenêtre modale sans bordure système
+    set_decorated(false);
 
-    // Classe CSS sur la fenêtre pour transparence intégrale sans halo
     add_css_class("app-details-window");
-
     m_root_box.add_css_class("app-details-modal");
 
-    // 1. Bouton fermer [✕] fixé en haut
+    // 1. Bouton fermer [✕] fixé en haut à gauche
     m_top_bar.set_margin_start(24);
     m_top_bar.set_margin_end(24);
     m_top_bar.set_margin_top(18);
+    m_btn_close.set_halign(Gtk::Align::START);
     m_btn_close.set_icon_name("window-close-symbolic");
     m_btn_close.add_css_class("modal-close-btn");
     m_btn_close.set_cursor("pointer");
@@ -73,7 +71,7 @@ AppDetailsModal::AppDetailsModal(Gtk::Window& parent) {
     m_top_bar.append(m_btn_close);
     m_root_box.append(m_top_bar);
 
-    // 2. En-tête : Icône 80px, Textes et Bouton bleu Installer (FIXÉ en haut, ne défile pas)
+    // 2. En-tête : Icône 80px, Textes et Bouton d'action
     m_header_box.set_margin_start(24);
     m_header_box.set_margin_end(24);
     m_header_box.set_margin_bottom(12);
@@ -91,7 +89,6 @@ AppDetailsModal::AppDetailsModal(Gtk::Window& parent) {
     m_dev_label.add_css_class("modal-app-dev");
     m_dev_label.set_halign(Gtk::Align::START);
 
-    // Ligne Développeur + Badge vérifié Flathub
     m_dev_badge_box.set_orientation(Gtk::Orientation::HORIZONTAL);
     m_dev_badge_box.set_spacing(8);
     m_dev_badge_box.set_valign(Gtk::Align::CENTER);
@@ -116,12 +113,11 @@ AppDetailsModal::AppDetailsModal(Gtk::Window& parent) {
 
     m_root_box.append(m_header_box);
 
-    // 3. Conteneur défilable : marge de 32px à droite pour isoler totalement la scrollbar
+    // 3. Conteneur défilable
     m_content_box.set_margin_start(24);
     m_content_box.set_margin_end(32);
     m_content_box.set_margin_bottom(24);
 
-    // Carrousel Adwaita pour les captures d'écran
     m_carousel_widget = adw_carousel_new();
     adw_carousel_set_spacing(ADW_CAROUSEL(m_carousel_widget), 14);
     adw_carousel_set_allow_mouse_drag(ADW_CAROUSEL(m_carousel_widget), TRUE);
@@ -171,14 +167,60 @@ AppDetailsModal::AppDetailsModal(Gtk::Window& parent) {
     m_root_box.append(m_scrolled_window);
     set_child(m_root_box);
 
-    // Connexion du dispatcher thread-safe pour la mise à jour asynchrone
     m_dispatcher.connect(sigc::mem_fun(*this, &AppDetailsModal::on_details_ready));
+    m_uninstall_dispatcher.connect([this]() {
+        m_signal_app_uninstalled.emit();
+        hide();
+    });
 }
 
-void AppDetailsModal::show_app(const core::DiscoverApp& app) {
-    m_current_app = app;
+void AppDetailsModal::update_action_button() {
+    m_btn_install.remove_css_class("modal-uninstall-btn");
 
-    // Textes de base
+    if (m_is_installed) {
+        if (m_is_system) {
+            m_btn_install.set_label("Système");
+            m_btn_install.set_sensitive(false);
+            m_btn_install.set_tooltip_text("Application système protégée non désinstallable");
+        } else {
+            m_btn_install.set_label("Désinstaller");
+            m_btn_install.set_sensitive(true);
+            m_btn_install.add_css_class("modal-uninstall-btn");
+            m_btn_install.set_tooltip_text("Désinstaller " + m_current_app.name);
+        }
+    } else {
+        m_btn_install.set_label("Installer");
+        m_btn_install.set_sensitive(true);
+        m_btn_install.set_tooltip_text("Installer " + m_current_app.name);
+    }
+}
+
+void AppDetailsModal::show_app(const core::DiscoverApp& app, bool is_installed, bool is_system) {
+    m_current_app = app;
+    m_is_installed = is_installed;
+    m_is_system = is_system;
+    m_status_checked = is_installed;
+
+    std::string detected_src = app.source;
+    std::string detected_pkg = app.package;
+
+    // Vérification immédiate via le cache (0ms)
+    if (!m_status_checked) {
+        bool sys = false;
+        if (core::AbpmService::is_app_installed(app.id, app.package, sys, detected_src, detected_pkg)) {
+            m_is_installed = true;
+            m_is_system = sys;
+            m_status_checked = true;
+            m_current_app.source = detected_src;
+            m_current_app.package = detected_pkg;
+        }
+    }
+
+    m_fetched_is_installed = m_is_installed;
+    m_fetched_is_system = m_is_system;
+    m_fetched_source = detected_src;
+    m_fetched_package = detected_pkg;
+
     m_name_label.set_label(app.name);
     std::string dev = extract_developer_name(app.id);
     if (is_valid_developer(dev)) {
@@ -188,9 +230,9 @@ void AppDetailsModal::show_app(const core::DiscoverApp& app) {
         m_dev_label.set_visible(false);
     }
     m_verified_badge.set_visible(false);
-    m_description_label.set_label(app.summary);
+    m_description_label.set_label(!app.summary.empty() ? app.summary : "Chargement des détails...");
 
-    // Vider le carrousel en attente du chargement
+    // Vider le carrousel en attente du rechargement
     auto carousel = ADW_CAROUSEL(m_carousel_widget);
     guint n_pages = adw_carousel_get_n_pages(carousel);
     for (guint i = 0; i < n_pages; ++i) {
@@ -219,21 +261,50 @@ void AppDetailsModal::show_app(const core::DiscoverApp& app) {
         }
     }
 
-    m_btn_install.set_sensitive(true);
-    m_btn_install.set_label("Installer");
+    // Affiche le bouton UNIQUEMENT si le statut est confirmé, sinon masqué
+    if (m_status_checked) {
+        update_action_button();
+        m_btn_install.set_visible(true);
+    } else {
+        m_btn_install.set_visible(false);
+    }
 
-    // Afficher immédiatement la fenêtre modale
     present();
 
-    // Lancer la récupération asynchrone des métadonnées et captures
-    std::thread([this, app]() {
+    // Détection en arrière-plan et métadonnées
+    std::thread([this, app, is_installed, is_system, detected_src, detected_pkg]() {
+        bool installed = is_installed;
+        bool sys = is_system;
+        std::string src = detected_src;
+        std::string pkg = detected_pkg;
+
+        if (!installed) {
+            installed = core::AbpmService::is_app_installed(app.id, app.package, sys, src, pkg);
+        }
+
         auto details = core::AbpmService::get_app_details(app);
         {
             std::lock_guard<std::mutex> lock(m_details_mutex);
             m_fetched_details = std::move(details);
+            m_fetched_is_installed = installed;
+            m_fetched_is_system = sys;
+            m_fetched_source = src;
+            m_fetched_package = pkg;
         }
         m_dispatcher.emit();
     }).detach();
+}
+
+void AppDetailsModal::show_app(const core::InstalledApp& app) {
+    core::DiscoverApp d_app;
+    d_app.id = app.id;
+    d_app.name = app.name;
+    d_app.summary = "";
+    d_app.icon = app.icon;
+    d_app.source = app.source;
+    d_app.package = app.package;
+    d_app.local_icon_path = app.local_icon_path;
+    show_app(d_app, true, app.is_system);
 }
 
 void AppDetailsModal::on_details_ready() {
@@ -244,6 +315,12 @@ void AppDetailsModal::on_details_ready() {
             return;
         }
         details = m_fetched_details;
+        m_is_installed = m_fetched_is_installed;
+        m_is_system = m_fetched_is_system;
+        if (m_is_installed) {
+            if (!m_fetched_source.empty()) m_current_app.source = m_fetched_source;
+            if (!m_fetched_package.empty()) m_current_app.package = m_fetched_package;
+        }
     }
 
     if (is_valid_developer(details.developer)) {
@@ -253,14 +330,17 @@ void AppDetailsModal::on_details_ready() {
         m_dev_label.set_visible(false);
     }
 
-    // Badge certifié Flathub
     m_verified_badge.set_visible(details.is_verified);
 
     if (!details.description.empty()) {
         m_description_label.set_label(details.description);
+    } else if (m_description_label.get_text() == "Chargement des détails...") {
+        m_description_label.set_label("Aucune description détaillée disponible pour cette application.");
     }
 
     update_carousel();
+    update_action_button();
+    m_btn_install.set_visible(true);
 }
 
 void AppDetailsModal::on_prev_screenshot() {
@@ -292,7 +372,6 @@ void AppDetailsModal::on_next_screenshot() {
 void AppDetailsModal::update_carousel() {
     auto carousel = ADW_CAROUSEL(m_carousel_widget);
 
-    // Vider les anciennes diapositives
     guint n_pages = adw_carousel_get_n_pages(carousel);
     for (guint i = 0; i < n_pages; ++i) {
         auto page = adw_carousel_get_nth_page(carousel, 0);
@@ -342,8 +421,32 @@ void AppDetailsModal::update_carousel() {
 }
 
 void AppDetailsModal::on_install_clicked() {
-    m_btn_install.set_sensitive(false);
-    m_btn_install.set_label("Installation...");
+    if (m_is_installed) {
+        if (m_is_system) return;
+
+        auto dialog = Gtk::AlertDialog::create("Désinstaller " + m_current_app.name + " ?");
+        dialog->set_detail("Cette action supprimera définitivement l'application via abpm.");
+        dialog->set_buttons({"Annuler", "Désinstaller"});
+        dialog->set_cancel_button(0);
+        dialog->set_default_button(1);
+
+        dialog->choose([this, dialog](const Glib::RefPtr<Gio::AsyncResult>& res) {
+            try {
+                int btn = dialog->choose_finish(res);
+                if (btn == 1) {
+                    m_btn_install.set_sensitive(false);
+                    m_btn_install.set_label("Désinstallation...");
+                    std::thread([this]() {
+                        core::AbpmService::uninstall_app(m_current_app.package, m_current_app.source);
+                        m_uninstall_dispatcher.emit();
+                    }).detach();
+                }
+            } catch (...) {}
+        });
+    } else {
+        m_btn_install.set_sensitive(false);
+        m_btn_install.set_label("Installation...");
+    }
 }
 
 } // namespace bluehub::ui

@@ -37,23 +37,23 @@ InstalledPage::InstalledPage() {
 
     set_child(m_root_box);
 
-    m_dispatcher.connect(sigc::mem_fun(*this, &InstalledPage::render_app_list));
-
+    m_dispatcher.connect([this]() { render_app_list(); });
     reload_apps();
 }
 
 void InstalledPage::reload_apps() {
     std::thread([this]() {
-        auto fetched = core::AbpmService::get_installed_apps();
+        auto apps = core::AbpmService::get_installed_apps(true);
         {
             std::lock_guard<std::mutex> lock(m_mutex);
-            m_apps = std::move(fetched);
+            m_apps = std::move(apps);
         }
         m_dispatcher.emit();
     }).detach();
 }
 
 void InstalledPage::render_app_list() {
+    // Vider les anciennes listes
     while (auto child = m_user_list_box.get_first_child()) {
         m_user_list_box.remove(*child);
     }
@@ -61,39 +61,35 @@ void InstalledPage::render_app_list() {
         m_system_list_box.remove(*child);
     }
 
-    std::vector<core::InstalledApp> current_apps;
+    std::vector<core::InstalledApp> user_apps;
+    std::vector<core::InstalledApp> system_apps;
+
     {
         std::lock_guard<std::mutex> lock(m_mutex);
-        current_apps = m_apps;
-    }
-
-    // Tri par ordre alphabétique insensible à la casse et gérant les accents français
-    std::sort(current_apps.begin(), current_apps.end(), [](const core::InstalledApp& a, const core::InstalledApp& b) {
-        return g_utf8_collate(a.name.c_str(), b.name.c_str()) < 0;
-    });
-
-    size_t user_count = 0;
-    size_t system_count = 0;
-
-    for (const auto& app : current_apps) {
-        if (app.is_system) {
-            m_system_list_box.append(*create_installed_row(app));
-            system_count++;
-        } else {
-            m_user_list_box.append(*create_installed_row(app));
-            user_count++;
+        for (const auto& app : m_apps) {
+            if (app.is_system) {
+                system_apps.push_back(app);
+            } else {
+                user_apps.push_back(app);
+            }
         }
     }
 
-    m_user_count_label.set_label("Applications installées (" + std::to_string(user_count) + ")");
+    // Tri alphabétique avec gestion propre des accents français (g_utf8_collate)
+    auto alphabet_sort = [](const core::InstalledApp& a, const core::InstalledApp& b) {
+        return g_utf8_collate(a.name.c_str(), b.name.c_str()) < 0;
+    };
+    std::sort(user_apps.begin(), user_apps.end(), alphabet_sort);
+    std::sort(system_apps.begin(), system_apps.end(), alphabet_sort);
 
-    if (system_count > 0) {
-        m_system_count_label.set_label("Utilitaires système (" + std::to_string(system_count) + ")");
-        m_system_header_box.set_visible(true);
-        m_system_list_box.set_visible(true);
-    } else {
-        m_system_header_box.set_visible(false);
-        m_system_list_box.set_visible(false);
+    m_user_count_label.set_label("Applications installées (" + std::to_string(user_apps.size()) + ")");
+    for (const auto& app : user_apps) {
+        m_user_list_box.append(*create_installed_row(app));
+    }
+
+    m_system_count_label.set_label("Utilitaires système (" + std::to_string(system_apps.size()) + ")");
+    for (const auto& app : system_apps) {
+        m_system_list_box.append(*create_installed_row(app));
     }
 }
 
@@ -121,7 +117,6 @@ Gtk::Box* InstalledPage::create_installed_row(const core::InstalledApp& app) {
             icon_img->set_from_icon_name("application-x-executable");
         }
     }
-    row->append(*icon_img);
 
     // 2. Nom, badge éventuel et version
     auto text_box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 4);
@@ -135,8 +130,6 @@ Gtk::Box* InstalledPage::create_installed_row(const core::InstalledApp& app) {
 
     auto sub_box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
 
-    // Badge de source UNIQUEMENT pour Flatpak, Archive et AppImage
-    // Les paquets standards DNF et RPM n'ont pas de badge pour ne pas encombrer la vue
     if (app.source == "flatpak") {
         auto badge = Gtk::make_managed<Gtk::Label>("Flatpak");
         badge->add_css_class("badge-source");
@@ -160,9 +153,22 @@ Gtk::Box* InstalledPage::create_installed_row(const core::InstalledApp& app) {
         sub_box->append(*ver_label);
     }
     text_box->append(*sub_box);
-    row->append(*text_box);
 
-    // 3. Actions contextuelles
+    // Conteneur cliquable : ouvrir la modale au clic sur l'application
+    auto click_box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 16);
+    click_box->set_hexpand(true);
+    click_box->set_cursor("pointer");
+    click_box->append(*icon_img);
+    click_box->append(*text_box);
+
+    auto gesture = Gtk::GestureClick::create();
+    gesture->signal_pressed().connect([this, app](int, double, double) {
+        open_app_details(app);
+    });
+    click_box->add_controller(gesture);
+    row->append(*click_box);
+
+    // 3. Actions contextuelles rapides
     auto actions_box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 8);
     actions_box->set_valign(Gtk::Align::CENTER);
 
@@ -190,7 +196,7 @@ Gtk::Box* InstalledPage::create_installed_row(const core::InstalledApp& app) {
         actions_box->append(*icon_btn);
     }
 
-    // Action C : Désinstallation (uniquement pour les applications non-système)
+    // Action C : Désinstallation directe (non-système)
     if (!app.is_system) {
         auto delete_btn = Gtk::make_managed<Gtk::Button>();
         delete_btn->set_icon_name("user-trash-symbolic");
@@ -204,6 +210,21 @@ Gtk::Box* InstalledPage::create_installed_row(const core::InstalledApp& app) {
 
     row->append(*actions_box);
     return row;
+}
+
+void InstalledPage::open_app_details(const core::InstalledApp& app) {
+    if (!m_details_modal) {
+        auto root = dynamic_cast<Gtk::Window*>(get_root());
+        if (root) {
+            m_details_modal = std::make_unique<AppDetailsModal>(*root);
+            m_details_modal->signal_app_uninstalled().connect([this]() {
+                reload_apps();
+            });
+        }
+    }
+    if (m_details_modal) {
+        m_details_modal->show_app(app);
+    }
 }
 
 void InstalledPage::on_modify_permissions(const core::InstalledApp& app) {
