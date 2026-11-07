@@ -488,6 +488,9 @@ void DiscoverPage::open_app_details(const core::DiscoverApp& app) {
             m_details_modal->signal_install_requested().connect([this](const core::DiscoverApp& d_app) {
                 m_signal_install_app.emit(d_app);
             });
+            m_details_modal->signal_update_requested().connect([this](const core::UpdateItem& item) {
+                m_signal_update_app.emit(item);
+            });
         }
     }
     if (m_details_modal) {

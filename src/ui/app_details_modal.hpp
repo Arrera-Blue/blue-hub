@@ -18,9 +18,11 @@ public:
 
     sigc::signal<void()>& signal_app_uninstalled() { return m_signal_app_uninstalled; }
     sigc::signal<void(const core::DiscoverApp&)>& signal_install_requested() { return m_signal_install_requested; }
+    sigc::signal<void(const core::UpdateItem&)>& signal_update_requested() { return m_signal_update_requested; }
 
 private:
     void on_install_clicked();
+    void on_update_clicked();
     void on_details_ready();
     void on_prev_screenshot();
     void on_next_screenshot();
@@ -44,7 +46,9 @@ private:
     Gtk::Box m_dev_badge_box{Gtk::Orientation::HORIZONTAL, 8};
     Gtk::Label m_dev_label;
     Gtk::Label m_verified_badge{"Vérifié"};
+    Gtk::Box m_actions_box{Gtk::Orientation::HORIZONTAL, 10};
     Gtk::Button m_btn_install{"Installer"};
+    Gtk::Button m_btn_update{"Mettre à jour"};
 
     // 3. Carrousel Adwaita pour les captures d'écran
     Gtk::Box m_carousel_container{Gtk::Orientation::VERTICAL, 8};
@@ -71,8 +75,15 @@ private:
     std::string m_fetched_source;
     std::string m_fetched_package;
 
+    // État de mise à jour
+    bool m_has_update{false};
+    core::UpdateItem m_update_item;
+    bool m_fetched_has_update{false};
+    core::UpdateItem m_fetched_update_item;
+
     sigc::signal<void()> m_signal_app_uninstalled;
     sigc::signal<void(const core::DiscoverApp&)> m_signal_install_requested;
+    sigc::signal<void(const core::UpdateItem&)> m_signal_update_requested;
     Glib::Dispatcher m_uninstall_dispatcher;
 };
 

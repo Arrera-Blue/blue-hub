@@ -109,7 +109,17 @@ AppDetailsModal::AppDetailsModal(Gtk::Window& parent) {
     m_btn_install.set_valign(Gtk::Align::CENTER);
     m_btn_install.set_cursor("pointer");
     m_btn_install.signal_clicked().connect(sigc::mem_fun(*this, &AppDetailsModal::on_install_clicked));
-    m_header_box.append(m_btn_install);
+
+    m_btn_update.add_css_class("modal-update-btn");
+    m_btn_update.set_valign(Gtk::Align::CENTER);
+    m_btn_update.set_cursor("pointer");
+    m_btn_update.set_visible(false);
+    m_btn_update.signal_clicked().connect(sigc::mem_fun(*this, &AppDetailsModal::on_update_clicked));
+
+    m_actions_box.set_valign(Gtk::Align::CENTER);
+    m_actions_box.append(m_btn_install);
+    m_actions_box.append(m_btn_update);
+    m_header_box.append(m_actions_box);
 
     m_root_box.append(m_header_box);
 
@@ -178,17 +188,38 @@ void AppDetailsModal::update_action_button() {
     m_btn_install.remove_css_class("modal-uninstall-btn");
 
     if (m_is_installed) {
-        if (m_is_system) {
-            m_btn_install.set_label("Système");
-            m_btn_install.set_sensitive(false);
-            m_btn_install.set_tooltip_text("Application système protégée non désinstallable");
+        if (m_has_update) {
+            m_btn_update.set_visible(true);
+            m_btn_update.set_sensitive(true);
+            m_btn_update.set_label("Mettre à jour");
+            if (!m_update_item.new_version.empty()) {
+                m_btn_update.set_tooltip_text("Mettre à jour vers " + m_update_item.new_version);
+            } else {
+                m_btn_update.set_tooltip_text("Mettre à jour " + m_current_app.name);
+            }
         } else {
+            m_btn_update.set_visible(false);
+        }
+
+        if (m_is_system) {
+            if (m_has_update) {
+                m_btn_install.set_visible(false);
+            } else {
+                m_btn_install.set_visible(true);
+                m_btn_install.set_label("Système");
+                m_btn_install.set_sensitive(false);
+                m_btn_install.set_tooltip_text("Application système protégée non désinstallable");
+            }
+        } else {
+            m_btn_install.set_visible(true);
             m_btn_install.set_label("Désinstaller");
             m_btn_install.set_sensitive(true);
             m_btn_install.add_css_class("modal-uninstall-btn");
             m_btn_install.set_tooltip_text("Désinstaller " + m_current_app.name);
         }
     } else {
+        m_btn_update.set_visible(false);
+        m_btn_install.set_visible(true);
         m_btn_install.set_label("Installer");
         m_btn_install.set_sensitive(true);
         m_btn_install.set_tooltip_text("Installer " + m_current_app.name);
@@ -203,6 +234,14 @@ void AppDetailsModal::show_app(const core::DiscoverApp& app, bool is_installed, 
 
     std::string detected_src = app.source;
     std::string detected_pkg = app.package;
+
+    m_has_update = false;
+    m_update_item = {};
+    core::UpdateItem fast_up;
+    if (core::AbpmService::is_update_available(app.id, app.package, fast_up)) {
+        m_has_update = true;
+        m_update_item = fast_up;
+    }
 
     // Vérification immédiate via le cache (0ms)
     if (!m_status_checked) {
@@ -220,6 +259,8 @@ void AppDetailsModal::show_app(const core::DiscoverApp& app, bool is_installed, 
     m_fetched_is_system = m_is_system;
     m_fetched_source = detected_src;
     m_fetched_package = detected_pkg;
+    m_fetched_has_update = m_has_update;
+    m_fetched_update_item = m_update_item;
 
     m_name_label.set_label(app.name);
     std::string dev = extract_developer_name(app.id);
@@ -297,6 +338,9 @@ void AppDetailsModal::show_app(const core::DiscoverApp& app, bool is_installed, 
             installed = core::AbpmService::is_app_installed(app.id, app.package, sys, src, pkg);
         }
 
+        core::UpdateItem async_up;
+        bool has_up = core::AbpmService::is_update_available(app.id, pkg, async_up);
+
         auto details = core::AbpmService::get_app_details(app);
         {
             std::lock_guard<std::mutex> lock(m_details_mutex);
@@ -305,6 +349,8 @@ void AppDetailsModal::show_app(const core::DiscoverApp& app, bool is_installed, 
             m_fetched_is_system = sys;
             m_fetched_source = src;
             m_fetched_package = pkg;
+            m_fetched_has_update = has_up;
+            m_fetched_update_item = async_up;
         }
         m_dispatcher.emit();
     }).detach();
@@ -332,6 +378,8 @@ void AppDetailsModal::on_details_ready() {
         details = m_fetched_details;
         m_is_installed = m_fetched_is_installed;
         m_is_system = m_fetched_is_system;
+        m_has_update = m_fetched_has_update;
+        m_update_item = m_fetched_update_item;
         if (m_is_installed) {
             if (!m_fetched_source.empty()) m_current_app.source = m_fetched_source;
             if (!m_fetched_package.empty()) m_current_app.package = m_fetched_package;
@@ -460,6 +508,13 @@ void AppDetailsModal::on_install_clicked() {
         });
     } else {
         m_signal_install_requested.emit(m_current_app);
+        hide();
+    }
+}
+
+void AppDetailsModal::on_update_clicked() {
+    if (m_has_update) {
+        m_signal_update_requested.emit(m_update_item);
         hide();
     }
 }

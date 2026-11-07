@@ -319,6 +319,23 @@ window.app-details-window decoration {
     opacity: 0.7;
 }
 
+.modal-update-btn {
+    background-color: #2563eb;
+    color: #ffffff;
+    font-size: 1rem;
+    font-weight: 700;
+    padding: 10px 28px;
+    border-radius: 9999px;
+    border: none;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+    transition: all 0.15s ease;
+}
+
+.modal-update-btn:hover {
+    background-color: #1d4ed8;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.38);
+}
+
 /* Carrousel de captures d'écran de la modale */
 .modal-carousel-container {
     margin-top: 4px;
@@ -590,6 +607,7 @@ window.app-details-window decoration {
     font-size: 0.95rem;
     font-weight: 700;
     color: #2563eb;
+    font-feature-settings: "tnum";
 }
 
 .install-progressbar trough {
@@ -602,4 +620,43 @@ window.app-details-window decoration {
     min-height: 8px;
     border-radius: 9999px;
     background-color: #2563eb;
+}
+
+/* Boutons sous chaque catégorie de mise à jour */
+.btn-category-update {
+    background-color: transparent;
+    color: #2b7de9;
+    border: 1.5px solid #2b7de9;
+    border-radius: 9999px;
+    padding: 7px 22px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-top: 8px;
+    margin-bottom: 4px;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.btn-category-update:hover {
+    background-color: #2b7de9;
+    color: #ffffff;
+}
+
+/* Badge de versions pour les mises à jour */
+.update-version-label {
+    font-size: 0.8rem;
+    color: #64748b;
+    font-weight: 500;
+}
+
+/* Bouton rafraîchir en haut */
+.btn-refresh-updates {
+    border-radius: 9999px;
+    padding: 6px 10px;
+    background: transparent;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+}
+
+.btn-refresh-updates:hover {
+    background: #f1f5f9;
 }

@@ -39,6 +39,19 @@ struct InstalledApp {
     bool is_system{false};   
 };
 
+struct UpdateItem {
+    std::string id;
+    std::string name;
+    std::string category;        // "app", "utility", "system"
+    std::string current_version;
+    std::string new_version;
+    std::string source;          // "dnf" ou "flatpak"
+    std::string package;
+    std::string icon;
+    std::string local_icon_path;
+    std::string summary;
+};
+
 class AbpmService {
 public:
     static std::vector<DiscoverApp> get_discover_apps(int page = 1, int per_page = 6);
@@ -51,6 +64,9 @@ public:
     static bool set_app_icon(const std::string& package, const std::string& icon_path);
     static bool uninstall_app(const std::string& package, const std::string& source);
     static void invalidate_installed_cache();
+    static std::vector<UpdateItem> get_available_updates(bool force_refresh = false);
+    static bool is_update_available(const std::string& id, const std::string& package, UpdateItem& out_update);
+    static void invalidate_updates_cache();
 };
 
 } // namespace bluehub::core

@@ -28,9 +28,12 @@ InstalledPage::InstalledPage() {
     m_install_title_label.add_css_class("install-progress-title");
     m_install_title_label.set_halign(Gtk::Align::START);
     m_install_title_label.set_hexpand(true);
+    m_install_title_label.set_ellipsize(Pango::EllipsizeMode::END);
 
     m_install_pct_label.add_css_class("install-progress-pct");
     m_install_pct_label.set_halign(Gtk::Align::END);
+    m_install_pct_label.set_width_chars(6);
+    m_install_pct_label.set_xalign(1.0f);
 
     m_install_header_row.append(m_install_title_label);
     m_install_header_row.append(m_install_pct_label);
@@ -282,6 +285,9 @@ void InstalledPage::open_app_details(const core::InstalledApp& app) {
             m_details_modal->signal_install_requested().connect([this](const core::DiscoverApp& d_app) {
                 start_installation(d_app);
             });
+            m_details_modal->signal_update_requested().connect([this](const core::UpdateItem& item) {
+                m_signal_update_app.emit(item);
+            });
         }
     }
     if (m_details_modal) {
@@ -524,8 +530,13 @@ void InstalledPage::on_install_progress_updated() {
         return;
     }
 
-    m_install_status_label.set_text(progress.status_message);
-    m_install_pct_label.set_text(std::to_string(progress.percentage) + " %");
+    if (m_install_status_label.get_text() != progress.status_message) {
+        m_install_status_label.set_text(progress.status_message);
+    }
+    std::string pct_text = std::to_string(progress.percentage) + " %";
+    if (m_install_pct_label.get_text() != pct_text) {
+        m_install_pct_label.set_text(pct_text);
+    }
     m_install_progress_bar.set_fraction(std::clamp(progress.percentage / 100.0, 0.0, 1.0));
 
     if (progress.is_finished) {

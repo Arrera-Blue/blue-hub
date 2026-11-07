@@ -27,6 +27,7 @@ public:
 
     void reload_apps();
     void start_installation(const core::DiscoverApp& app);
+    sigc::signal<void(const core::UpdateItem&)>& signal_update_app() { return m_signal_update_app; }
 
 private:
     void open_app_details(const core::InstalledApp& app);
@@ -72,6 +73,7 @@ private:
 
     std::unique_ptr<FlatpakPermissionsModal> m_permissions_modal;
     std::unique_ptr<AppDetailsModal> m_details_modal;
+    sigc::signal<void(const core::UpdateItem&)> m_signal_update_app;
 };
 
 } // namespace bluehub::ui

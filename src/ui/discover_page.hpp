@@ -18,6 +18,7 @@ public:
     ~DiscoverPage() override;
 
     sigc::signal<void(const core::DiscoverApp&)>& signal_install_app() { return m_signal_install_app; }
+    sigc::signal<void(const core::UpdateItem&)>& signal_update_app() { return m_signal_update_app; }
 
 private:
     void on_prev_clicked();
@@ -74,6 +75,7 @@ private:
     void open_app_details(const core::DiscoverApp& app);
     std::unique_ptr<AppDetailsModal> m_details_modal;
     sigc::signal<void(const core::DiscoverApp&)> m_signal_install_app;
+    sigc::signal<void(const core::UpdateItem&)> m_signal_update_app;
 };
 
 } // namespace bluehub::ui

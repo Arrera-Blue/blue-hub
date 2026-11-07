@@ -553,8 +553,19 @@ bool AbpmService::set_app_icon(const std::string& package, const std::string& ic
     }
 }
 
+static std::vector<UpdateItem> s_updates_cache;
+static bool s_has_updates_cache = false;
+static std::mutex s_updates_mutex;
+
+void AbpmService::invalidate_updates_cache() {
+    std::lock_guard<std::mutex> lock(s_updates_mutex);
+    s_has_updates_cache = false;
+    s_updates_cache.clear();
+}
+
 bool AbpmService::uninstall_app(const std::string& package, const std::string& source) {
     invalidate_installed_cache();
+    invalidate_updates_cache();
     std::string cmd;
     if (source == "flatpak") {
         cmd = "flatpak uninstall -y " + package;
@@ -568,6 +579,131 @@ bool AbpmService::uninstall_app(const std::string& package, const std::string& s
     } catch (...) {
         return false;
     }
+}
+
+std::vector<UpdateItem> AbpmService::get_available_updates(bool force_refresh) {
+    if (!force_refresh) {
+        std::lock_guard<std::mutex> lock(s_updates_mutex);
+        if (s_has_updates_cache) {
+            return s_updates_cache;
+        }
+    }
+
+    std::vector<UpdateItem> updates;
+
+    std::string stdout_data;
+    std::string stderr_data;
+    int exit_status = 0;
+
+    try {
+        Glib::spawn_command_line_sync("abpm check --json", &stdout_data, &stderr_data, &exit_status);
+    } catch (const Glib::Error& ex) {
+        std::cerr << "Erreur lors de abpm check --json : " << ex.what() << std::endl;
+        return updates;
+    }
+
+    if (stdout_data.empty()) {
+        return updates;
+    }
+
+    // Extraction du JSON entre le premier '[' et le dernier ']'
+    auto start_pos = stdout_data.find('[');
+    auto end_pos = stdout_data.rfind(']');
+    if (start_pos == std::string::npos || end_pos == std::string::npos || end_pos <= start_pos) {
+        return updates;
+    }
+    std::string json_str = stdout_data.substr(start_pos, end_pos - start_pos + 1);
+
+    std::regex block_regex(R"raw(\{[^{}]+\})raw");
+    auto it = std::sregex_iterator(json_str.begin(), json_str.end(), block_regex);
+    auto end = std::sregex_iterator();
+
+    for (; it != end; ++it) {
+        std::string block = it->str();
+        std::string id = extract_json_field(block, "id");
+        std::string name = extract_json_field(block, "name");
+        std::string category = extract_json_field(block, "category");
+        std::string cur_ver = extract_json_field(block, "current_version");
+        std::string new_ver = extract_json_field(block, "new_version");
+        std::string source = extract_json_field(block, "source");
+        std::string pkg = extract_json_field(block, "package");
+        std::string icon = extract_json_field(block, "icon");
+        std::string summary = extract_json_field(block, "summary");
+
+        if (!id.empty()) {
+            UpdateItem item;
+            item.id = id;
+            item.name = name.empty() ? id : name;
+            item.category = category.empty() ? "system" : category;
+            item.current_version = cur_ver;
+            item.new_version = new_ver;
+            item.source = source.empty() ? "dnf" : source;
+            item.package = pkg.empty() ? id : pkg;
+            item.icon = icon;
+            item.summary = summary;
+
+            // Résolution automatique de l'icône locale
+            if (!icon.empty() && icon.rfind("http", 0) != 0) {
+                item.local_icon_path = find_local_app_icon(icon, id, pkg);
+            } else if (icon.empty()) {
+                item.local_icon_path = find_local_app_icon(id, id, pkg);
+            }
+
+            updates.push_back(item);
+        }
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(s_updates_mutex);
+        s_updates_cache = updates;
+        s_has_updates_cache = true;
+    }
+
+    return updates;
+}
+
+bool AbpmService::is_update_available(const std::string& id, const std::string& package, UpdateItem& out_update) {
+    auto strip_desktop = [](std::string s) {
+        if (s.size() > 8 && s.rfind(".desktop") == s.size() - 8) {
+            s.resize(s.size() - 8);
+        }
+        return s;
+    };
+
+    auto iequals = [&strip_desktop](std::string a, std::string b) {
+        a = strip_desktop(a);
+        b = strip_desktop(b);
+        if (a.empty() || b.empty() || a.size() != b.size()) return false;
+        for (size_t i = 0; i < a.size(); ++i) {
+            if (std::tolower(static_cast<unsigned char>(a[i])) !=
+                std::tolower(static_cast<unsigned char>(b[i]))) {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    std::vector<UpdateItem> updates;
+    {
+        std::lock_guard<std::mutex> lock(s_updates_mutex);
+        if (s_has_updates_cache) {
+            updates = s_updates_cache;
+        }
+    }
+    if (updates.empty()) {
+        updates = get_available_updates(false);
+    }
+
+    for (const auto& u : updates) {
+        if (iequals(u.id, id) ||
+            iequals(u.package, package) ||
+            (!id.empty() && iequals(u.package, id)) ||
+            (!package.empty() && iequals(u.id, package))) {
+            out_update = u;
+            return true;
+        }
+    }
+    return false;
 }
 
 } // namespace bluehub::core

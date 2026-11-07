@@ -84,6 +84,16 @@ MainWindow::MainWindow() {
         m_installed_page.start_installation(app);
     });
 
+    m_discover_page.signal_update_app().connect([this](const core::UpdateItem& item) {
+        switch_tab("updates");
+        m_updates_page.start_single_update(item);
+    });
+
+    m_installed_page.signal_update_app().connect([this](const core::UpdateItem& item) {
+        switch_tab("updates");
+        m_updates_page.start_single_update(item);
+    });
+
     switch_tab("discover");
 
     set_child(m_stack);
@@ -103,6 +113,7 @@ void MainWindow::switch_tab(const std::string& tab_name) {
         m_installed_page.reload_apps();
     } else if (tab_name == "updates") {
         m_btn_updates.add_css_class("active");
+        m_updates_page.reload_updates();
     }
 }
 
